@@ -283,7 +283,6 @@ Ensure all variables within the `.env` file are explicitly defined before starti
 
 ### 5. Generate Prisma Client
 ```bash
-cd Backend
 pnpm prisma generate
 ```
 
@@ -360,11 +359,11 @@ kora --config kora.toml rpc start --signers-config signers.toml
 
 ### 5. Linking to Solus Protocol
 
-Navigate to your **Solus-Protocol/Backend** folder and update your `.env` to match the Kora credentials.
+Navigate back to your **Backend** folder and update your `.env` to match the Kora credentials.
 
 ```bash
 # Enter Solus backend
-cd ../Solus-Protocol/Backend
+cd ../Backend
 
 # Add these to your .env
 KORA_RPC_URL=http://localhost:8080
