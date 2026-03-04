@@ -9,7 +9,7 @@
 [![Radix UI](https://img.shields.io/badge/Radix_UI-Primitives-161618)](https://www.radix-ui.com)
 [![Socket.io](https://img.shields.io/badge/Socket.io-Client-010101)](https://socket.io)
 
-> 🔗 **[Backend Repository & Full System Docs](https://github.com/Fortexfreddie/Solus-Protocol)**
+> **[Backend Engine & Full System Docs](../Backend/README.md)**
 
 ---
 
@@ -248,7 +248,7 @@ Frontend/
 
 - **Node.js** 20 or higher
 - **pnpm** (recommended) or npm
-- **Backend running** on port 3001 — see [Backend Setup](https://github.com/Fortexfreddie/Solus-Protocol)
+- **Backend running** on port 3001 — see [Backend Setup](../Backend/README.md)
 
 ---
 
@@ -295,7 +295,7 @@ pnpm install
 pnpm dev
 ```
 
-> The backend must be running on port 3001 before the frontend can display live data. See the [Backend README](https://github.com/Fortexfreddie/Solus-Protocol) for full setup instructions (Kora paymaster, API keys, etc.).
+> The backend must be running on port 3001 before the frontend can display live data. See the [Backend README](../Backend/README.md) for full setup instructions (Kora paymaster, API keys, etc.).
 
 ### 2. Start the Frontend
 
@@ -356,9 +356,9 @@ All panels use a `.glass` class with backdrop blur, semi-transparent backgrounds
 
 ## Related Documentation
 
-- **[Backend README](https://github.com/Fortexfreddie/Solus-Protocol)** — Full system architecture, API reference, WebSocket events, security model, and setup guide
-- **[DEEP_DIVE.md](https://github.com/Fortexfreddie/Solus-Protocol/blob/main/DEEP_DIVE.md)** — Comprehensive technical deep dive into the 7-layer air-gap engine
-- **[SKILLS.md](https://github.com/Fortexfreddie/Solus-Protocol/blob/main/SKILLS.md)** — Agent operator manual injected as LLM system prompt
+- **[Backend README](../Backend/README.md)** — Full system architecture, API reference, WebSocket events, security model, and setup guide
+- **[DEEP_DIVE.md](../Backend/DEEP_DIVE.md)** — Comprehensive technical deep dive into the 7-layer air-gap engine
+- **[SKILLS.md](../Backend/SKILLS.md)** — Agent operator manual injected as LLM system prompt
 
 ---
 
