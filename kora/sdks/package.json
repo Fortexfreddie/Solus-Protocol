@@ -1,0 +1,19 @@
+{
+  "name": "kora-sdks",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.12.3",
+  "pnpm": {
+    "overrides": {
+      "markdown-it": ">=14.1.1",
+      "diff": ">=4.0.4",
+      "js-yaml": ">=4.1.1",
+      "brace-expansion": ">=2.0.2"
+    }
+  }
+}

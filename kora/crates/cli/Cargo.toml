@@ -1,0 +1,27 @@
+[package]
+name = "kora-cli"
+version = "2.0.4"
+edition = "2021"
+description = "CLI for Kora gasless relayer"
+license = "MIT"
+readme = "../../README.md"
+
+[[bin]]
+name = "kora"
+path = "src/main.rs"
+
+[features]
+docs = ["kora-lib/docs", "dep:utoipa"]
+
+[dependencies]
+kora-lib = { path = "../lib", version = "2.0.4" }
+clap = { workspace = true }
+tokio = { workspace = true }
+env_logger = { workspace = true }
+solana-client = { workspace = true }
+dotenv = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true, optional = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+log = { workspace = true }
