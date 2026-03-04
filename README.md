@@ -20,6 +20,9 @@ This repository is a monorepo containing both the **Backend Engine** and the **M
 - [**Frontend (Mission Control Dashboard)**](./Frontend/README.md)
   The Next.js real-time observer dashboard. Connects via WebSocket to surface agent thinking, audits, policy checks, and live PnL in real time.
 
+- **[Kora (Paymaster Service)](./Backend/README.md#kora-paymaster-setup--integration)**
+  The localized Solana gasless paymaster module, bundled with custom `kora.toml` and `signers.toml` configurations for immediate plug-and-play execution.
+
 ---
 
 ## Quick Start

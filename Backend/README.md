@@ -305,14 +305,11 @@ Follow these steps to get your local gasless infrastructure running alongside **
 
 ### 1. Installation & Build
 
-Open a terminal and navigate to your workspace to clone and build the Kora CLI.
+The customized Kora CLI configuration is bundled directly within this monorepo to ensure seamless gasless integration. Note: you need Rust and Cargo installed to build it.
 
 ```bash
-# Clone the repository
-git clone https://github.com/solana-foundation/kora.git
-
-# Enter the directory
-cd kora
+# Enter the Kora directory from the root
+cd ../kora
 
 # Install the Kora CLI using Cargo (Standard Rust installation)
 cargo install --path crates/cli
@@ -355,7 +352,7 @@ private_key_env = "KORA_PRIVATE_KEY"
 You must start the Kora server before running the Solus backend so the agents have a service to talk to.
 
 ```bash
-# Run the RPC server from the kora root directory
+# Run the RPC server from the bundled kora directory
 kora --config kora.toml rpc start --signers-config signers.toml
 ```
 
