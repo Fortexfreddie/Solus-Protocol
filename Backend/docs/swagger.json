@@ -1,0 +1,986 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Solus Protocol API",
+        "version": "2.0.0",
+        "description": "Multi-Agent Agentic Wallet System on Solana Devnet. All endpoints are read-only — writes happen exclusively through autonomous agent cycles."
+    },
+    "servers": [
+        {
+            "url": "http://localhost:3001",
+            "description": "Local development server"
+        }
+    ],
+    "paths": {
+        "/health": {
+            "get": {
+                "summary": "System health check",
+                "description": "Returns operational status of all subsystems: Solana RPC, Kora Paymaster, price cache, agent cycles, and WebSocket readiness.",
+                "tags": [
+                    "System"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Health status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "ok"
+                                        },
+                                        "timestamp": {
+                                            "type": "number"
+                                        },
+                                        "rpc": {
+                                            "type": "object",
+                                            "properties": {
+                                                "connected": {
+                                                    "type": "boolean"
+                                                },
+                                                "slot": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "latencyMs": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                }
+                                            }
+                                        },
+                                        "kora": {
+                                            "type": "object",
+                                            "properties": {
+                                                "connected": {
+                                                    "type": "boolean"
+                                                },
+                                                "signerAddress": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "latencyMs": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                }
+                                            }
+                                        },
+                                        "prices": {
+                                            "type": "object",
+                                            "properties": {
+                                                "fresh": {
+                                                    "type": "boolean"
+                                                },
+                                                "stale": {
+                                                    "type": "boolean"
+                                                }
+                                            }
+                                        },
+                                        "agents": {
+                                            "type": "object"
+                                        },
+                                        "ws": {
+                                            "type": "object",
+                                            "properties": {
+                                                "ready": {
+                                                    "type": "boolean"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents": {
+            "get": {
+                "summary": "List all agents",
+                "description": "Returns all three agent profiles (Rex, Nova, Sage) with current cycle count, public key, and rate limit status.",
+                "tags": [
+                    "Agents"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agent list",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "agents": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/AgentSummary"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/{id}": {
+            "get": {
+                "summary": "Get single agent",
+                "description": "Returns a single agent's profile, cycle count, public key, and rate limit status.",
+                "tags": [
+                    "Agents"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "rex",
+                                "nova",
+                                "sage"
+                            ]
+                        },
+                        "description": "Agent ID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agent details",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentSummary"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown agent ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/{id}/balance": {
+            "get": {
+                "summary": "Get agent balance",
+                "description": "Fetches the live on-chain SOL and SPL token balances for the specified agent's vault wallet.",
+                "tags": [
+                    "Agents"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "rex",
+                                "nova",
+                                "sage"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agent balance",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "agentId": {
+                                            "type": "string"
+                                        },
+                                        "balance": {
+                                            "$ref": "#/components/schemas/AgentBalance"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown agent ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Balance fetch failed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/{id}/history": {
+            "get": {
+                "summary": "Get agent transaction history",
+                "description": "Returns the most recent confirmed transactions for the specified agent.",
+                "tags": [
+                    "Agents"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "rex",
+                                "nova",
+                                "sage"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        },
+                        "description": "Maximum number of transactions to return"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Transaction history",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "agentId": {
+                                            "type": "string"
+                                        },
+                                        "transactions": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/TxRecord"
+                                            }
+                                        },
+                                        "count": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown agent ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/proofs": {
+            "get": {
+                "summary": "List all proof records",
+                "description": "Returns all Proof-of-Reasoning records anchored on Solana Devnet via the Memo Program.",
+                "tags": [
+                    "Proofs"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Proof list",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "proofs": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "count": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/proofs/{hash}": {
+            "get": {
+                "summary": "Verify a proof record",
+                "description": "Looks up a proof record by its SHA-256 hash and verifies the payload integrity by recomputing the hash.",
+                "tags": [
+                    "Proofs"
+                ],
+                "parameters": [
+                    {
+                        "name": "hash",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "SHA-256 hash of the proof payload"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Proof record with verification status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "entry": {
+                                            "type": "object"
+                                        },
+                                        "verified": {
+                                            "type": "boolean"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Proof not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/logs": {
+            "get": {
+                "summary": "Paginated audit log",
+                "description": "Returns paginated audit log entries across all agents. Most recent entries first.",
+                "tags": [
+                    "Audit"
+                ],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated log entries",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "entries": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        },
+                                        "page": {
+                                            "type": "integer"
+                                        },
+                                        "limit": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/prices": {
+            "get": {
+                "summary": "Current price data",
+                "description": "Returns the cached CoinGecko price data for SOL, USDC, RAY, and BONK with spreads and freshness status.",
+                "tags": [
+                    "Market Data"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Price data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "prices": {
+                                            "$ref": "#/components/schemas/PriceData"
+                                        },
+                                        "fresh": {
+                                            "type": "boolean"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Price data not yet available",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/{id}/status": {
+            "patch": {
+                "summary": "Kill Switch — pause or resume an agent",
+                "description": "Sets the operational status of a single agent. PAUSED agents skip all scheduled cycles until resumed. Takes effect on the next cycle.",
+                "tags": [
+                    "Agent Command Center"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "rex",
+                                "nova",
+                                "sage"
+                            ]
+                        },
+                        "description": "Agent ID"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "ACTIVE",
+                                            "PAUSED"
+                                        ],
+                                        "description": "New operational status for the agent"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Status updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "agentId": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "enum": [
+                                                "ACTIVE",
+                                                "PAUSED"
+                                            ]
+                                        },
+                                        "updatedAt": {
+                                            "type": "number"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid status value",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown agent ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/{id}/run": {
+            "post": {
+                "summary": "Force Run — trigger an immediate agent cycle",
+                "description": "Triggers an out-of-schedule cycle for the specified agent. Returns 202 immediately; the cycle runs asynchronously. Returns 403 if the agent is PAUSED, 429 if the 15-second cooldown has not elapsed.",
+                "tags": [
+                    "Agent Command Center"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "rex",
+                                "nova",
+                                "sage"
+                            ]
+                        },
+                        "description": "Agent ID"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Cycle triggered",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "agentId": {
+                                            "type": "string"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "triggeredAt": {
+                                            "type": "number"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Agent is PAUSED",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown agent ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Cooldown active (15-second minimum between cycles)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/leaderboard": {
+            "get": {
+                "summary": "PnL Leaderboard",
+                "description": "Returns all three agents ranked by net PnL (descending). PnL is computed as current portfolio USD value minus the agent's initial SOL balance (snapshotted at startup) valued at the live SOL price.",
+                "tags": [
+                    "Leaderboard"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Leaderboard",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "leaderboard": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/LeaderboardEntry"
+                                            }
+                                        },
+                                        "generatedAt": {
+                                            "type": "number"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Price data not yet available",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AgentSummary": {
+                "type": "object",
+                "properties": {
+                    "agentId": {
+                        "type": "string",
+                        "enum": [
+                            "rex",
+                            "nova",
+                            "sage"
+                        ]
+                    },
+                    "profile": {
+                        "$ref": "#/components/schemas/PersonalityProfile"
+                    },
+                    "cycleCount": {
+                        "type": "integer"
+                    },
+                    "publicKey": {
+                        "type": "string",
+                        "description": "Base58 Solana public key"
+                    },
+                    "rateLimit": {
+                        "type": "object",
+                        "properties": {
+                            "used": {
+                                "type": "integer"
+                            },
+                            "limit": {
+                                "type": "integer"
+                            },
+                            "windowMs": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "operationalStatus": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "PAUSED"
+                        ],
+                        "description": "Kill switch status — PAUSED agents skip all scheduled cycles"
+                    }
+                }
+            },
+            "PersonalityProfile": {
+                "type": "object",
+                "properties": {
+                    "agentId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "riskProfile": {
+                        "type": "string",
+                        "enum": [
+                            "aggressive",
+                            "conservative",
+                            "balanced"
+                        ]
+                    },
+                    "spreadThresholdPct": {
+                        "type": "number"
+                    },
+                    "minConfidence": {
+                        "type": "number"
+                    },
+                    "maxTxAmountSol": {
+                        "type": "number"
+                    },
+                    "dailyVolumeCapSol": {
+                        "type": "number"
+                    },
+                    "stopLossTriggerPct": {
+                        "type": "number"
+                    }
+                }
+            },
+            "AgentBalance": {
+                "type": "object",
+                "properties": {
+                    "sol": {
+                        "type": "number",
+                        "description": "SOL balance in SOL units"
+                    },
+                    "tokens": {
+                        "type": "object",
+                        "description": "SPL token balances by symbol",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "fetchedAt": {
+                        "type": "number",
+                        "description": "Unix timestamp of balance fetch"
+                    }
+                }
+            },
+            "TxRecord": {
+                "type": "object",
+                "properties": {
+                    "signature": {
+                        "type": "string"
+                    },
+                    "agentId": {
+                        "type": "string"
+                    },
+                    "fromToken": {
+                        "type": "string"
+                    },
+                    "toToken": {
+                        "type": "string"
+                    },
+                    "amountIn": {
+                        "type": "number"
+                    },
+                    "amountOut": {
+                        "type": "number"
+                    },
+                    "timestamp": {
+                        "type": "number"
+                    },
+                    "cycle": {
+                        "type": "integer"
+                    },
+                    "proofHash": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PriceData": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {
+                        "type": "number"
+                    },
+                    "stale": {
+                        "type": "boolean"
+                    },
+                    "prices": {
+                        "type": "object",
+                        "description": "Token prices with 24h change",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "usd": {
+                                    "type": "number"
+                                },
+                                "change24h": {
+                                    "type": "number"
+                                }
+                            }
+                        }
+                    },
+                    "spreads": {
+                        "type": "object",
+                        "description": "Computed price spreads between token pairs",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "spreadPct": {
+                                    "type": "number"
+                                },
+                                "direction": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "LeaderboardEntry": {
+                "type": "object",
+                "description": "PnL ranking entry for a single agent",
+                "properties": {
+                    "agentId": {
+                        "type": "string",
+                        "enum": [
+                            "rex",
+                            "nova",
+                            "sage"
+                        ]
+                    },
+                    "netPnLUsd": {
+                        "type": "number",
+                        "description": "Net profit/loss in USD"
+                    },
+                    "netPnLPct": {
+                        "type": "number",
+                        "description": "Net profit/loss as percentage of baseline"
+                    },
+                    "swapCount": {
+                        "type": "integer",
+                        "description": "Total confirmed swaps"
+                    },
+                    "liveValueUsd": {
+                        "type": "number",
+                        "description": "Current total portfolio value in USD"
+                    },
+                    "baselineUsd": {
+                        "type": "number",
+                        "description": "Agent's initial SOL balance (at startup) valued in USD at live price"
+                    },
+                    "operationalStatus": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "PAUSED"
+                        ]
+                    },
+                    "balances": {
+                        "type": "object",
+                        "properties": {
+                            "sol": {
+                                "type": "number"
+                            },
+                            "usdc": {
+                                "type": "number"
+                            },
+                            "ray": {
+                                "type": "number"
+                            },
+                            "bonk": {
+                                "type": "number"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "System",
+            "description": "System health and status"
+        },
+        {
+            "name": "Agents",
+            "description": "Agent profiles, balances, and transaction history"
+        },
+        {
+            "name": "Proofs",
+            "description": "Proof-of-Reasoning on-chain records"
+        },
+        {
+            "name": "Audit",
+            "description": "Append-only audit log"
+        },
+        {
+            "name": "Market Data",
+            "description": "CoinGecko price data and spread calculations"
+        },
+        {
+            "name": "Agent Command Center",
+            "description": "Kill Switch (pause/resume) and Force Run (trigger immediate cycle)"
+        },
+        {
+            "name": "Leaderboard",
+            "description": "PnL leaderboard ranking all agents by performance"
+        }
+    ]
+}

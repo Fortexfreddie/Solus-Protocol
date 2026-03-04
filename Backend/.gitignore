@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Environments & Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build Output
+dist/
+build/
+
+# Debug logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database
+# If you ever use a local sqlite db for testing, ignore it here
+*.db
+*.db-journal
+
+# Editor folders
+.vscode/
+.idea/
+.cursor/
+/src/generated/prisma
+
+## Keys and sensitive JSON keypairs
+keys/
+keys/*.json
+
+# Scripts and Doc
+# /doc
+
+# Solus Protocol Specific
+/wallets
+/logs
+Solus Protocol.md
+Solus Protocol_V2.md
+/src/generated/prisma

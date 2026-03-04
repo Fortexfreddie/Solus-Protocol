@@ -1,0 +1,467 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Vibrant agent palette */
+  --color-rex: #FF6B35;
+  --color-rex-glow: rgba(255, 107, 53, 0.15);
+  --color-nova: #7C5CFC;
+  --color-nova-glow: rgba(124, 92, 252, 0.15);
+  --color-sage: #00D68F;
+  --color-sage-glow: rgba(0, 214, 143, 0.15);
+
+  /* Core palette */
+  --color-slate-950: var(--bg-primary);
+  --color-emerald-400: #00D68F;
+  --color-emerald-500: #00B377;
+  --color-amber-400: #FFB547;
+  --color-amber-500: #FF6B35;
+  --color-blue-400: #7C5CFC;
+  --color-blue-500: #6344E0;
+  --color-red-400: #FF5A5A;
+  --color-red-500: #E53E3E;
+
+  /* Theme-aware semantic tokens (change with .light class) */
+  --color-surface: var(--bg-glass);
+  --color-surface-solid: var(--bg-glass-strong);
+  --color-panel: var(--bg-elevated);
+  --color-panel-hover: var(--bg-elevated-hover);
+  --color-edge: var(--border-subtle);
+  --color-edge-md: var(--border-medium);
+  --color-edge-strong: var(--border-strong);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-dim: var(--text-dim);
+  --color-ink-faint: var(--text-faint);
+  --color-inset: var(--bg-inset);
+  --color-track: var(--bg-track);
+  --color-section-header: var(--bg-section-header);
+}
+
+/* ─── Dark theme (default) ─────────────────────────────────── */
+:root {
+  --background: #050510;
+  --foreground: #e2e8f0;
+  --bg-primary: #050510;
+  --bg-secondary: #0a0a1a;
+  --bg-glass: rgba(10, 10, 26, 0.6);
+  --bg-glass-strong: rgba(10, 10, 26, 0.9);
+  --bg-elevated: rgba(255, 255, 255, 0.03);
+  --bg-elevated-hover: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --text-faint: #475569;
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --shadow-glow: rgba(0, 0, 0, 0.4);
+  --scrollbar-thumb: rgba(124, 92, 252, 0.2);
+  --scrollbar-hover: rgba(124, 92, 252, 0.4);
+  --bg-inset: rgba(0, 0, 20, 0.5);
+  --bg-track: rgba(255, 255, 255, 0.08);
+  --bg-section-header: rgba(10, 10, 26, 0.4);
+  --dot-bg: #050510;
+}
+
+/* ─── Light theme ──────────────────────────────────────────── */
+.light {
+  --background: #f8f9fc;
+  --foreground: #1a1a2e;
+  --bg-primary: #f8f9fc;
+  --bg-secondary: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.75);
+  --bg-glass-strong: rgba(255, 255, 255, 0.95);
+  --bg-elevated: rgba(0, 0, 0, 0.02);
+  --bg-elevated-hover: rgba(0, 0, 0, 0.05);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-medium: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --text-primary: #1a1a2e;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+  --text-faint: #cbd5e1;
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --shadow-glow: rgba(0, 0, 0, 0.06);
+  --scrollbar-thumb: rgba(124, 92, 252, 0.15);
+  --scrollbar-hover: rgba(124, 92, 252, 0.3);
+  --bg-inset: rgba(0, 0, 0, 0.04);
+  --bg-track: rgba(0, 0, 0, 0.06);
+  --bg-section-header: rgba(0, 0, 0, 0.02);
+  --dot-bg: #f8f9fc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark body background gradient */
+.dark body,
+:root:not(.light) body {
+  background-image:
+    radial-gradient(ellipse at 0% 0%, rgba(124, 92, 252, 0.06) 0px, transparent 50%),
+    radial-gradient(ellipse at 100% 0%, rgba(0, 214, 143, 0.05) 0px, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(255, 107, 53, 0.03) 0px, transparent 40%),
+    radial-gradient(ellipse at 80% 50%, rgba(124, 92, 252, 0.02) 0px, transparent 40%);
+}
+
+/* Light body background gradient */
+.light body {
+  background-image:
+    radial-gradient(ellipse at 0% 0%, rgba(124, 92, 252, 0.04) 0px, transparent 50%),
+    radial-gradient(ellipse at 100% 0%, rgba(0, 214, 143, 0.03) 0px, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(255, 107, 53, 0.02) 0px, transparent 40%);
+}
+
+/* ─── Glass panels ─────────────────────────────────────────── */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    0 4px 6px -1px var(--shadow-color),
+    0 2px 4px -1px var(--shadow-color),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.light .glass {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.glass-hover {
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.glass-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow:
+    0 12px 32px -8px var(--shadow-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Agent-tinted glass */
+.glass-rex {
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.06) 0%, var(--bg-glass) 50%);
+  border-color: rgba(255, 107, 53, 0.12);
+}
+
+.glass-nova {
+  background: linear-gradient(135deg, rgba(124, 92, 252, 0.06) 0%, var(--bg-glass) 50%);
+  border-color: rgba(124, 92, 252, 0.12);
+}
+
+.glass-sage {
+  background: linear-gradient(135deg, rgba(0, 214, 143, 0.06) 0%, var(--bg-glass) 50%);
+  border-color: rgba(0, 214, 143, 0.12);
+}
+
+/* ─── Terminal text ────────────────────────────────────────── */
+.mono {
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* ─── Scrollbars ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* ─── Animations ───────────────────────────────────────────── */
+@keyframes borderPulse {
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 15px var(--glow-color, rgba(0, 214, 143, 0.15));
+  }
+
+  50% {
+    box-shadow: 0 0 30px var(--glow-color, rgba(0, 214, 143, 0.3));
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.active-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 214, 143, 0.6) 0%, rgba(124, 92, 252, 0.4) 50%, transparent 70%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: borderPulse 2.5s ease-in-out infinite;
+}
+
+/* ─── Animated gradient border ─────────────────────────────── */
+.gradient-border {
+  position: relative;
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #FF6B35, #7C5CFC, #00D68F, #FF6B35);
+  background-size: 300% 300%;
+  animation: gradient-shift 4s ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.5;
+}
+
+/* ─── Ping animation ──────────────────────────────────────── */
+@keyframes ping-slow {
+
+  75%,
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* ─── Terminal cursor blink ────────────────────────────────── */
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* ─── Gradient text ────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #00D68F 0%, #7C5CFC 50%, #FF6B35 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-rex {
+  background: linear-gradient(135deg, #FF6B35 0%, #FFB547 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-nova {
+  background: linear-gradient(135deg, #7C5CFC 0%, #A78BFA 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-sage {
+  background: linear-gradient(135deg, #00D68F 0%, #00F5A0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Accent lines ─────────────────────────────────────────── */
+.accent-line-rex {
+  background: linear-gradient(90deg, rgba(255, 107, 53, 0.8) 0%, transparent 100%);
+}
+
+.accent-line-nova {
+  background: linear-gradient(90deg, rgba(124, 92, 252, 0.8) 0%, transparent 100%);
+}
+
+.accent-line-sage {
+  background: linear-gradient(90deg, rgba(0, 214, 143, 0.8) 0%, transparent 100%);
+}
+
+/* ─── Neon glow utilities ──────────────────────────────────── */
+.neon-rex {
+  text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+}
+
+.neon-nova {
+  text-shadow: 0 0 10px rgba(124, 92, 252, 0.5);
+}
+
+.neon-sage {
+  text-shadow: 0 0 10px rgba(0, 214, 143, 0.5);
+}
+
+.glow-rex {
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.15), 0 0 40px rgba(255, 107, 53, 0.05);
+}
+
+.glow-nova {
+  box-shadow: 0 0 20px rgba(124, 92, 252, 0.15), 0 0 40px rgba(124, 92, 252, 0.05);
+}
+
+.glow-sage {
+  box-shadow: 0 0 20px rgba(0, 214, 143, 0.15), 0 0 40px rgba(0, 214, 143, 0.05);
+}
+
+.light .neon-rex,
+.light .neon-nova,
+.light .neon-sage {
+  text-shadow: none;
+}
+
+/* ─── Shimmer loading ──────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.light .shimmer {
+  background: linear-gradient(90deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.03) 50%,
+      rgba(0, 0, 0, 0) 100%);
+  background-size: 200% 100%;
+}
+
+/* ─── Status indicator dot ─────────────────────────────────── */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── Slide up animation utility ───────────────────────────── */
+.animate-slide-up {
+  animation: slide-up-fade 0.3s ease-out forwards;
+}
