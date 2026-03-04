@@ -497,6 +497,22 @@ Executes a complete end-to-end agent cycle simulation.
 
 ---
 
+## Solus CLI (Command Line Interface)
+
+The backend includes a fully-featured CLI for real-time portfolio monitoring and agent control directly from your terminal.
+
+Ensure the backend server is running (`pnpm dev`), then open a new terminal in the `Backend` directory:
+
+-   `pnpm solus status` — View the live fleet PnL leaderboard, aggregate swap counts, and active operational status.
+-   `pnpm solus tail <agentId>` — Stream the live 7-layer event bus payloads for a specific agent (e.g., `pnpm solus tail rex`).
+-   `pnpm solus pause <agentId>` — **Kill Switch:** Stop an agent from commencing future cycles.
+-   `pnpm solus resume <agentId>` — Resume a paused agent.
+-   `pnpm solus fire <agentId>` — **Force Run:** Trigger an immediate out-of-schedule cycle for an agent (bypasses the 60s timer, subject to a 15s rate limit).
+
+> **Note:** All commands target `localhost:3001` by default. You can override this using the `-p <port>` flag (e.g., `pnpm solus status -p 8080`).
+
+---
+
 ## API Reference
 
 All REST endpoints operate on JSON schemas.
