@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. Kora Rate-Limit Cache (Redis)
+  # ==========================================
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./kora/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+  # ==========================================
+  # 2. Kora Paymaster Service
+  # ==========================================
+  kora:
+    build:
+      context: ./kora
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./kora/kora.toml:/app/kora.toml
+      - ./kora/signers.toml:/app/signers.toml
+      - ./kora/.env:/app/.env:ro
+    environment:
+      - RUST_LOG=info
+    env_file:
+      - ./kora/.env
+    command:
+      - sh
+      - -c
+      - "kora --config /app/kora.toml --rpc-url $${RPC_URL:-http://127.0.0.1:8899} rpc start --signers-config /app/signers.toml"
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  # ==========================================
+  # 3. Solus Protocol Backend (Node.js)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend/wallets:/app/wallets  # Persist local dev keys
+    env_file:
+      - ./backend/.env
+    environment:
+      # Inject Docker internal DNS to route Kora requests over the bridge network
+      - NODE_ENV=development
+      - KORA_RPC_URL=http://kora:8080
+    restart: always
+    depends_on:
+      - kora
+
+  # ==========================================
+  # 4. Mission Control Dashboard (Next.js)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env
+    environment:
+      # Next.js client-side polling resolves from the user's browser, relying on host mapping
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+      - NEXT_PUBLIC_WS_URL=http://localhost:3001
+    restart: always
+    depends_on:
+      - backend
+
+# Preserve Redis cache state between container restarts
+volumes:
+  redis_data:

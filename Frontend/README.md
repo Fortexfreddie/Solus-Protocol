@@ -9,7 +9,7 @@
 [![Radix UI](https://img.shields.io/badge/Radix_UI-Primitives-161618)](https://www.radix-ui.com)
 [![Socket.io](https://img.shields.io/badge/Socket.io-Client-010101)](https://socket.io)
 
-> **[Backend Engine & Full System Docs](../Backend/README.md)**
+> **[backend Engine & Full System Docs](../backend/README.md)**
 
 ---
 
@@ -191,7 +191,7 @@ User clicks Force Run → POST /api/agents/:id/run
 ## Project Structure
 
 ```text
-Frontend/
+frontend/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx              # Root layout, fonts, ThemeProvider, Toaster
@@ -248,7 +248,7 @@ Frontend/
 
 - **Node.js** 20 or higher
 - **pnpm** (recommended) or npm
-- **Backend running** on port 3001 — see [Backend Setup](../Backend/README.md)
+- **backend running** on port 3001 — see [backend Setup](../backend/README.md)
 
 ---
 
@@ -287,20 +287,20 @@ NEXT_PUBLIC_WS_URL=http://localhost:3001
 
 ## Running Locally
 
-### 1. Start the Backend
+### 1. Start the backend
 
 ```bash
-cd ../Backend
+cd ../backend
 pnpm install
 pnpm dev
 ```
 
-> The backend must be running on port 3001 before the frontend can display live data. See the [Backend README](../Backend/README.md) for full setup instructions (Kora paymaster, API keys, etc.).
+> The backend must be running on port 3001 before the frontend can display live data. See the [backend README](../backend/README.md) for full setup instructions (Kora paymaster, API keys, etc.).
 
-### 2. Start the Frontend
+### 2. Start the frontend
 
 ```bash
-cd ../Frontend
+cd ../frontend
 pnpm dev
 ```
 
@@ -319,7 +319,7 @@ pnpm start
 
 ### Deploy to Render (Static Site)
 
-1. Set Root Directory to `Frontend`.
+1. Set Root Directory to `frontend`.
 2. Build Command: `pnpm install && pnpm build`.
 3. Start Command: `pnpm start`.
 4. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` to your backend's deployed URL.
@@ -356,9 +356,9 @@ All panels use a `.glass` class with backdrop blur, semi-transparent backgrounds
 
 ## Related Documentation
 
-- **[Backend README](../Backend/README.md)** — Full system architecture, API reference, WebSocket events, security model, and setup guide
-- **[DEEP_DIVE.md](../Backend/DEEP_DIVE.md)** — Comprehensive technical deep dive into the 7-layer air-gap engine
-- **[SKILLS.md](../Backend/SKILLS.md)** — Agent operator manual injected as LLM system prompt
+- **[backend README](../backend/README.md)** — Full system architecture, API reference, WebSocket events, security model, and setup guide
+- **[DEEP_DIVE.md](../backend/DEEP_DIVE.md)** — Comprehensive technical deep dive into the 7-layer air-gap engine
+- **[SKILLS.md](../backend/SKILLS.md)** — Agent operator manual injected as LLM system prompt
 
 ---
 

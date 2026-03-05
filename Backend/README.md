@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org)
 [![Solana](https://img.shields.io/badge/Solana-Devnet-purple)](https://solana.com)
 
-> **[Mission Control Dashboard (Frontend)](../Frontend/README.md)** | **[Watch the 3-Minute Demo Video Here](link)**
+> **[Mission Control Dashboard (frontend)](../frontend/README.md)** | **[Watch the 3-Minute Demo Video Here](link)**
 
 ---
 
@@ -262,21 +262,21 @@ git clone https://github.com/Fortexfreddie/Solus-Protocol.git
 cd Solus-Protocol
 ```
 
-### 2. Install Backend Dependencies
+### 2. Install backend Dependencies
 ```bash
-cd Backend
+cd backend
 pnpm install
 ```
 
-### 3. Install Frontend Dependencies
+### 3. Install frontend Dependencies
 ```bash
-cd ../Frontend
+cd ../frontend
 pnpm install
 ```
 
 ### 4. Set Environment Variables
 ```bash
-cd ../Backend
+cd ../backend
 cp .env.example .env
 ```
 Ensure all variables within the `.env` file are explicitly defined before starting the server.
@@ -359,11 +359,11 @@ kora --config kora.toml rpc start --signers-config signers.toml
 
 ### 5. Linking to Solus Protocol
 
-Navigate back to your **Backend** folder and update your `.env` to match the Kora credentials.
+Navigate back to your **backend** folder and update your `.env` to match the Kora credentials.
 
 ```bash
 # Enter Solus backend
-cd ../Backend
+cd ../backend
 
 # Add these to your .env
 KORA_RPC_URL=http://localhost:8080
@@ -450,7 +450,7 @@ The project includes progressive smoke tests to validate configuration phases.
 
 ### Phase 1 — Vault and Solana Core
 ```bash
-cd Backend
+cd backend
 pnpm smoke:vault
 ```
 Verifies wallet generation, Devnet connection, Kora connectivity, and agent funding.
@@ -477,19 +477,19 @@ Executes a complete end-to-end agent cycle simulation.
 
 ## Deploying to Render
 
-### Backend Service
+### backend Service
 1.  Configure a generic Web Service.
-2.  Set Root Directory to `Backend`.
+2.  Set Root Directory to `backend`.
 3.  Command: `pnpm install && pnpm build && pnpm prisma migrate deploy`
 4.  Start Command: `pnpm start`
 5.  Assign `NODE_ENV=production` alongside all `.env` specifications. Database URLs must securely route to the PostgreSQL cluster.
 
-### Frontend Service
+### frontend Service
 1.  Configure a Static Site module.
-2.  Set Root Directory to `Frontend`.
+2.  Set Root Directory to `frontend`.
 3.  Command: `pnpm install && pnpm build`
 4.  Publish Directory: `.next`
-5.  Assign `NEXT_PUBLIC_BACKEND_URL` to route correctly.
+5.  Assign `NEXT_PUBLIC_backend_URL` to route correctly.
 
 ---
 
@@ -497,7 +497,7 @@ Executes a complete end-to-end agent cycle simulation.
 
 The backend includes a fully-featured CLI for real-time portfolio monitoring and agent control directly from your terminal.
 
-Ensure the backend server is running (`pnpm dev`), then open a new terminal in the `Backend` directory:
+Ensure the backend server is running (`pnpm dev`), then open a new terminal in the `backend` directory:
 
 -   `pnpm solus status` — View the live fleet PnL leaderboard, aggregate swap counts, and active operational status.
 -   `pnpm solus tail <agentId>` — Stream the live 7-layer event bus payloads for a specific agent (e.g., `pnpm solus tail rex`).

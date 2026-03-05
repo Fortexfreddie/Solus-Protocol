@@ -14,13 +14,13 @@ This repository is a monorepo containing both the **Backend Engine** and the **M
 
 ## Repository Structure
 
-- [**Backend (The 7-Layer Air-Gap Engine)**](./Backend/README.md)
+- [**backend (The 7-Layer Air-Gap Engine)**](./backend/README.md)
   The core trading engine, containing the LLM orchestration (DeepSeek & Gemini), Policy Engine, on-chain Proof-of-Reasoning, AES-256-GCM Vaults, and Kora Paymaster integration.
   
-- [**Frontend (Mission Control Dashboard)**](./Frontend/README.md)
+- [**frontend (Mission Control Dashboard)**](./frontend/README.md)
   The Next.js real-time observer dashboard. Connects via WebSocket to surface agent thinking, audits, policy checks, and live PnL in real time.
 
-- **[Kora (Paymaster Service)](./Backend/README.md#kora-paymaster-setup--integration)**
+- **[Kora (Paymaster Service)](./backend/README.md#kora-paymaster-setup--integration)**
   The localized Solana gasless paymaster module, bundled with custom `kora.toml` and `signers.toml` configurations for immediate plug-and-play execution.
 
 ---
@@ -29,9 +29,9 @@ This repository is a monorepo containing both the **Backend Engine** and the **M
 
 To run the full stack locally:
 
-### 1. Start the Backend
+### 1. Start the backend
 ```bash
-cd Backend
+cd backend
 pnpm install
 cp .env.example .env
 # Important: Fill in your LLM, Kora, and Solana variables in .env
@@ -39,10 +39,10 @@ pnpm smoke:vault # Auto-funds the agents
 pnpm dev
 ```
 
-### 2. Start the Frontend
+### 2. Start the frontend
 In a new terminal:
 ```bash
-cd Frontend
+cd frontend
 pnpm install
 cp .env.example .env
 pnpm dev
@@ -51,12 +51,32 @@ Navigate to `http://localhost:3000` to view the dashboard!
 
 ---
 
+## Docker Deployment (Recommended)
+
+You can spin up the entire **Solus Protocol stack** (Backend, Frontend, Kora Paymaster, and Redis Cache) using a single Docker Compose command.
+
+Ensure you have copied the `.env.example` to `.env` in both the `backend` and `frontend` directories, as well as configuring the `kora/.env`, then run:
+
+```bash
+docker-compose up --build -d
+```
+
+This will:
+1. Build the Kora Rust binary and boot its Redis cache.
+2. Build the Node.js API Engine and mount your local `wallets/` directory.
+3. Build the Next.js Mission Control dashboard.
+4. Auto-route internal DNS (`http://kora:8080`) between the completely air-gapped containers.
+
+The dashboard will be live at `http://localhost:3000`.
+
+---
+
 ## Technical Documentation
 
-- **[Backend Architecture & Setup](./Backend/README.md)**
-- **[Frontend Architecture & Setup](./Frontend/README.md)**
-- **[Deep Dive: The 7-Layer Engine](./Backend/DEEP_DIVE.md)**
-- **[Agent Skills & Prompt Manual](./Backend/SKILLS.md)**
+- **[backend Architecture & Setup](./backend/README.md)**
+- **[frontend Architecture & Setup](./frontend/README.md)**
+- **[Deep Dive: The 7-Layer Engine](./backend/DEEP_DIVE.md)**
+- **[Agent Skills & Prompt Manual](./backend/SKILLS.md)**
 
 ---
 

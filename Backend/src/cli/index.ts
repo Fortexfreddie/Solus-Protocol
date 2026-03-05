@@ -16,7 +16,7 @@ program
 program
     .command('status')
     .description('View fleet PnL leaderboard and operational status')
-    .option('-p, --port <number>', 'Backend port', '3001')
+    .option('-p, --port <number>', 'backend port', '3001')
     .action(async (options) => {
         await statusCommand(parseInt(options.port));
     });
@@ -25,7 +25,7 @@ program
 program
     .command('tail <agentId>')
     .description('Stream live 7-layer audit logs for an agent')
-    .option('-p, --port <number>', 'Backend port', '3001')
+    .option('-p, --port <number>', 'backend port', '3001')
     .action(async (agentId, options) => {
         await tailCommand(agentId as any, parseInt(options.port));
     });
@@ -34,7 +34,7 @@ program
 program
     .command('pause <agentId>')
     .description('Kill Switch: Stop an agent from running cycles')
-    .option('-p, --port <number>', 'Backend port', '3001')
+    .option('-p, --port <number>', 'backend port', '3001')
     .action(async (agentId, options) => {
         await toggleAgent(agentId as any, 'PAUSED', parseInt(options.port));
     });
@@ -42,7 +42,7 @@ program
 program
     .command('resume <agentId>')
     .description('Resume an agent to active status')
-    .option('-p, --port <number>', 'Backend port', '3001')
+    .option('-p, --port <number>', 'backend port', '3001')
     .action(async (agentId, options) => {
         await toggleAgent(agentId as any, 'ACTIVE', parseInt(options.port));
     });
@@ -51,7 +51,7 @@ program
 program
     .command('fire <agentId>')
     .description('Force an immediate cycle run (15s cooldown)')
-    .option('-p, --port <number>', 'Backend port', '3001')
+    .option('-p, --port <number>', 'backend port', '3001')
     .action(async (agentId, options) => {
         await forceRun(agentId as any, parseInt(options.port));
     });
