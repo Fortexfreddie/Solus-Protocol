@@ -49,6 +49,16 @@ pnpm dev
 ```
 Navigate to `http://localhost:3000` to view the dashboard!
 
+### 3. Use the Solus CLI (Optional)
+With the backend running, open a new terminal in the `backend/` directory:
+```bash
+pnpm solus status            # Fleet PnL leaderboard
+pnpm solus tail rex          # Stream live 7-layer audit logs
+pnpm solus pause nova        # Kill Switch: stop an agent
+pnpm solus resume nova       # Resume a paused agent
+pnpm solus fire sage         # Force an immediate cycle
+```
+
 ---
 
 ## Docker Deployment (Recommended)

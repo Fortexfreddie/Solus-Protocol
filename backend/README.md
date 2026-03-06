@@ -25,6 +25,8 @@
 - [Installation](#installation)
 - [Environment Variables](#environment-variables)
 - [Running Locally](#running-locally)
+- [Solus CLI](#solus-cli-command-line-interface)
+- [Docker Deployment](#docker-deployment)
 - [Smoke Tests](#smoke-tests)
 - [Deploying to Render](#deploying-to-render)
 - [API Reference](#api-reference)
@@ -200,25 +202,43 @@ Kora serves as the Solana Foundation's official gasless signing infrastructure. 
 ```text
 solus-protocol/
 │
+├── docker-compose.yml         # Full-stack orchestration (Kora, Redis, Backend, Frontend)
+│
 ├── backend/
 │   ├── src/
-│   │   ├── price/             # Price Oracle and caching mechanisms
-│   │   ├── brain/             # LLM orchestration (Strategist/Guardian)
-│   │   ├── security/          # Policy Engine, profiles, audit logger
-│   │   ├── proof/             # SHA-256 and Solana Memo logic
-│   │   ├── wallet/            # AES-256 Vault, KeyStore, and token management
-│   │   ├── protocol/          # Kora Paymaster integration and broadcast
 │   │   ├── agent/             # Single agent pipeline and multi-agent orchestrator
+│   │   ├── api/               # Express REST routes and controllers
+│   │   │   ├── controllers/   # Request handlers
+│   │   │   └── routes/        # Route definitions
+│   │   ├── brain/             # LLM orchestration (Strategist/Guardian)
+│   │   ├── cli/               # Solus CLI (Commander.js)
+│   │   │   ├── commands/      # Individual command implementations
+│   │   │   │   ├── control.ts # pause / resume / fire commands
+│   │   │   │   ├── status.ts  # Fleet leaderboard & PnL table
+│   │   │   │   └── tail.ts    # Live WebSocket event log streamer
+│   │   │   ├── index.ts       # CLI entry point (program.parse)
+│   │   │   └── ui-helpers.ts  # Chalk theme & formatting utilities
+│   │   ├── config/            # Runtime configuration (db.ts)
 │   │   ├── events/            # WebSocket event bus (Socket.io)
-│   │   ├── api/               # Express REST sub-routes
-│   │   ├── db/                # Prisma client setup for Dev/Prod compatibility
+│   │   ├── price/             # Price Oracle and caching mechanisms
+│   │   ├── proof/             # SHA-256 and Solana Memo logic
+│   │   ├── protocol/          # Kora Paymaster integration and broadcast
+│   │   ├── scripts/           # Smoke test runners and utilities
+│   │   ├── security/          # Policy Engine, profiles, audit logger
 │   │   ├── types/             # Shared TypeScript definitions
-│   │   └── index.ts           # Application entry point
+│   │   ├── wallet/            # AES-256 Vault, KeyStore, and token management
+│   │   ├── app.ts             # Express app setup, middleware, Socket.io, Swagger
+│   │   └── index.ts           # Application entry point (bootstrap + orchestrator)
 │   │
-│   ├── prisma/                # Database schema (PostgreSQL)
+│   ├── docs/                  # Swagger / OpenAPI specification
+│   │   └── swagger.json
+│   ├── prisma/                # Database schema and migrations (PostgreSQL)
 │   ├── wallets/               # Encrypted vault files for local dev
 │   ├── logs/                  # Dev audit log output
+│   ├── Dockerfile             # Multi-stage Node.js 20 Alpine image
+│   ├── .dockerignore
 │   ├── .env.example
+│   ├── prisma.config.ts       # Prisma config for custom output paths
 │   ├── package.json
 │   └── tsconfig.json
 │
@@ -228,9 +248,11 @@ solus-protocol/
 │   ├── hooks/                 # Real-time WebSocket aggregators
 │   ├── lib/                   # API clients (SWR setup)
 │   ├── types/
+│   ├── Dockerfile             # Next.js production image
 │   ├── package.json
 │   └── next.config.js
 │
+├── kora/                      # Bundled Kora Paymaster source & config
 ├── SKILLS.md                  # Agent operator manual (Dynamic prompt base)
 ├── DEEP_DIVE.md               # Technical architecture deep dive
 └── README.md                  # System overview and setup guide
@@ -443,6 +465,58 @@ pnpm dev
 Navigate to `http://localhost:3000` to interact with the Mission Control dashboard.
 
 ---
+
+## Docker Deployment
+
+The entire Solus Protocol stack can be spun up with a single command using Docker Compose. This is the recommended approach for consistent, reproducible environments.
+
+### Prerequisites
+-   **Docker** and **Docker Compose** installed.
+-   `.env` files configured in `backend/`, `frontend/`, and `kora/` directories (see [Environment Variables](#environment-variables) and [Kora Paymaster Setup](#kora-paymaster-setup--integration)).
+
+### Backend Dockerfile
+
+The backend image is built from `Node.js 20 Alpine` with Prisma support:
+
+```dockerfile
+FROM node:20-alpine
+RUN apk add --no-cache openssl libc6-compat   # Required by Prisma on Alpine
+RUN corepack enable && corepack prepare pnpm@latest --activate
+# ... installs deps, generates Prisma client, builds TypeScript
+CMD ["pnpm", "start"]
+```
+
+### Running with Docker Compose
+
+From the **repository root**:
+
+```bash
+docker-compose up --build -d
+```
+
+This orchestrates four services:
+
+| Service | Description | Port |
+|---------|-------------|------|
+| `redis` | Kora rate-limit cache (Redis 8 Alpine) | `6379` |
+| `kora` | Solana gasless paymaster (Rust binary) | `8080` |
+| `backend` | Solus Protocol API Engine (Node.js) | `3001` |
+| `frontend` | Mission Control Dashboard (Next.js) | `3000` |
+
+Inter-service routing is handled automatically via Docker's internal DNS (e.g., `http://kora:8080`). The backend's local `wallets/` directory is volume-mounted for dev key persistence.
+
+### Useful Docker Commands
+
+```bash
+# View live logs across all services
+docker-compose logs -f
+
+# Rebuild and restart a single service
+docker-compose up --build -d backend
+
+# Tear down all containers and volumes
+docker-compose down -v
+```
 
 ## Smoke Tests
 
