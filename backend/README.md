@@ -583,13 +583,13 @@ Ensure the backend server is running (`pnpm dev`), then open a new terminal in t
 ### Running via Docker
 If the Solus Protocol stack is running via Docker Compose, you **do not** need to `cd` into the backend or install dependencies locally. 
 
-Instead, execute the CLI directly inside the running `backend` container from the project root:
+Instead, use the included wrapper scripts in the project root to execute the CLI directly inside the running `backend` container:
 
--   `docker compose exec backend pnpm solus status`
--   `docker compose exec backend pnpm solus tail rex`
--   `docker compose exec backend pnpm solus pause nova`
+-   `./solus status` (or `.\solus status` on Windows PowerShell)
+-   `./solus tail rex`
+-   `./solus pause nova`
 
-> **Note:** All commands target `localhost:3001` by default. You can override this using the `-p <port>` flag (e.g., `pnpm solus status -p 8080`).
+> **Note:** All commands target `localhost:3001` by default. You can override this using the `-p <port>` flag (e.g., `.\solus status -p 8080`).
 
 ---
 
