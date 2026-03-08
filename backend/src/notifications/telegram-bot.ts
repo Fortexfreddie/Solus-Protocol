@@ -26,39 +26,39 @@ const logger = getAuditLogger();
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const VALID_AGENTS: AgentId[]  = ['rex', 'nova', 'sage'];
-const EXPLORER_BASE            = 'https://explorer.solana.com/tx';
-const CLUSTER                  = 'devnet';
+const VALID_AGENTS: AgentId[] = ['rex', 'nova', 'sage'];
+const EXPLORER_BASE = 'https://explorer.solana.com/tx';
+const CLUSTER = 'devnet';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TelegramConfig {
-    token:    string;
-    chatId:   string;
+    token: string;
+    chatId: string;
     adminId?: string;
 }
 
 type SendOptions = {
-    keyboard?:       TelegramBot.InlineKeyboardMarkup;
+    keyboard?: TelegramBot.InlineKeyboardMarkup;
     disablePreview?: boolean;
 };
 
 // ─── Visual Identity ──────────────────────────────────────────────────────────
 
 const AGENT_DOT: Record<AgentId, string> = {
-    rex:  '🔴',
+    rex: '🔴',
     nova: '🟣',
     sage: '🟢',
 };
 
 const EVENT_ICON: Partial<Record<WsEventType, string>> = {
-    TX_CONFIRMED:   '✅',
-    TX_FAILED:      '🚫',
+    TX_CONFIRMED: '✅',
+    TX_FAILED: '🚫',
     GUARDIAN_AUDIT: '🛡',
     PROOF_ANCHORED: '⚓',
-    POLICY_FAIL:    '🔴',
+    POLICY_FAIL: '🔴',
     BALANCE_UPDATE: '💰',
-    AGENT_COMMAND:  '⚙️',
+    AGENT_COMMAND: '⚙️',
 };
 
 const agentLabel = (id: AgentId): string =>
@@ -96,18 +96,18 @@ const timestamp = (): string =>
 function escapeMd(text: string): string {
     if (!text) return '';
     return text
-        .replace(/_/g,  '‗')
+        .replace(/_/g, '‗')
         .replace(/\*/g, '∗')
-        .replace(/`/g,  'ʻ')
+        .replace(/`/g, 'ʻ')
         .replace(/\[/g, '［');
 }
 
 // ─── TelegramNotifier ─────────────────────────────────────────────────────────
 
 export class TelegramNotifier {
-    private bot:          TelegramBot;
-    private chatId:       string;
-    private adminId:      string | null;
+    private bot: TelegramBot;
+    private chatId: string;
+    private adminId: string | null;
     private orchestrator: AgentOrchestrator;
     private initialized = false;
 
@@ -122,8 +122,8 @@ export class TelegramNotifier {
     ];
 
     constructor(config: TelegramConfig, orchestrator: AgentOrchestrator) {
-        this.chatId       = config.chatId;
-        this.adminId      = config.adminId ?? null;
+        this.chatId = config.chatId;
+        this.adminId = config.adminId ?? null;
         this.orchestrator = orchestrator;
         this.bot = new TelegramBot(config.token, { polling: true });
     }
@@ -136,7 +136,7 @@ export class TelegramNotifier {
             const isActive = statuses[id].operationalStatus === 'ACTIVE';
             return [
                 isActive
-                    ? { text: `⏸ Pause ${id.toUpperCase()}`,  callback_data: `pause:${id}` }
+                    ? { text: `⏸ Pause ${id.toUpperCase()}`, callback_data: `pause:${id}` }
                     : { text: `▶️ Resume ${id.toUpperCase()}`, callback_data: `resume:${id}` },
                 { text: `🔥 Fire ${id.toUpperCase()}`, callback_data: `fire:${id}` },
             ];
@@ -147,9 +147,9 @@ export class TelegramNotifier {
                 row('nova'),
                 row('sage'),
                 [
-                    { text: '📊 Status',   callback_data: 'cmd:status' },
+                    { text: '📊 Status', callback_data: 'cmd:status' },
                     { text: '💰 Balances', callback_data: 'cmd:balances' },
-                    { text: '🔄 Refresh',  callback_data: 'cmd:refresh' },
+                    { text: '🔄 Refresh', callback_data: 'cmd:refresh' },
                 ],
             ],
         };
@@ -161,7 +161,7 @@ export class TelegramNotifier {
             inline_keyboard: [
                 [
                     isActive
-                        ? { text: `⏸ Pause ${id.toUpperCase()}`,  callback_data: `pause:${id}` }
+                        ? { text: `⏸ Pause ${id.toUpperCase()}`, callback_data: `pause:${id}` }
                         : { text: `▶️ Resume ${id.toUpperCase()}`, callback_data: `resume:${id}` },
                     { text: `🔥 Fire ${id.toUpperCase()}`, callback_data: `fire:${id}` },
                 ],
@@ -184,9 +184,9 @@ export class TelegramNotifier {
     private _send(text: string, opts: SendOptions = {}): void {
         this.bot
             .sendMessage(this.chatId, text, {
-                parse_mode:               'Markdown',
+                parse_mode: 'Markdown',
                 disable_web_page_preview: opts.disablePreview ?? true,
-                reply_markup:             opts.keyboard,
+                reply_markup: opts.keyboard,
             })
             .catch((err) => {
                 // Log first 200 chars of message for diagnosis
@@ -243,8 +243,8 @@ export class TelegramNotifier {
     private _handleEvent(event: WsEventEnvelope): void {
         const { type, agentId, payload } = event;
         const agent = agentLabel(agentId);
-        const icon  = EVENT_ICON[type] ?? '🔔';
-        const p     = payload as any;
+        const icon = EVENT_ICON[type] ?? '🔔';
+        const p = payload as any;
 
         switch (type) {
 
@@ -357,7 +357,7 @@ export class TelegramNotifier {
             case 'AGENT_COMMAND': {
                 const cmd = (p.command as string).toUpperCase();
                 if (['PAUSE', 'RESUME', 'SET_STATUS'].includes(cmd)) {
-                    const label     = cmd === 'SET_STATUS' ? (p.status ?? 'STATUS_UPDATE') : cmd;
+                    const label = cmd === 'SET_STATUS' ? (p.status ?? 'STATUS_UPDATE') : cmd;
                     const stateIcon = label === 'RESUME' ? '▶️' : label === 'PAUSE' ? '⏸' : '⚙️';
                     this._send(
                         `${stateIcon} ${icon} ${agent} — *STATE TRANSITION*\n` +
@@ -400,7 +400,7 @@ export class TelegramNotifier {
         this.bot.onText(/\/status/, async () => {
             try {
                 const map = this.orchestrator.getAgentStatus();
-                let msg = `📊 *FLEET STATUS*\n${'─'.repeat(28)}\n`;
+                let msg = `📊 *Agent Status*\n`;
                 for (const [id, s] of Object.entries(map)) {
                     const active = s.operationalStatus === 'ACTIVE';
                     msg +=
@@ -420,7 +420,7 @@ export class TelegramNotifier {
         this.bot.onText(/\/balances/, async () => {
             try {
                 const map = this.orchestrator.getAgentStatus();
-                let msg = `💰 *LIVE BALANCES* (approx)\n${'─'.repeat(28)}\n`;
+                let msg = `💰 *Agent Balances*\n`;
                 for (const [id, s] of Object.entries(map)) {
                     let solBal = '_unavailable_';
                     try {
@@ -443,7 +443,7 @@ export class TelegramNotifier {
         this.bot.onText(/\/agents/, async () => {
             try {
                 const map = this.orchestrator.getAgentStatus();
-                let msg = `🤖 *AGENT HEALTH REPORT*\n${'─'.repeat(28)}\n`;
+                let msg = `🤖 *Agent Health*\n`;
                 for (const [id, s] of Object.entries(map)) {
                     const active = s.operationalStatus === 'ACTIVE';
                     msg +=
@@ -461,26 +461,24 @@ export class TelegramNotifier {
 
         this.bot.onText(/\/control/, () => {
             this._send(
-                `⚙️ *FLEET CONTROL PANEL*\n` +
-                `${'─'.repeat(28)}\n` +
-                `Select an action below.\n` +
-                `🔒 _Admin-only actions will be verified._`,
+                `⚙️ *Agent Dashboard*\n\n` +
+                `Select an action below to manage the agents.\n` +
+                `🔒 _Admin actions will be verified._`,
                 { keyboard: this.getFleetKeyboard() },
             );
         });
 
-        this.bot.onText(/\/killswitch/, async (msg: TelegramBot.Message) => {
+        this.bot.onText(/\/stopall/, async (msg: TelegramBot.Message) => {
             if (!this._isAdmin(msg)) return this._send('⛔ *Unauthorized* — Admin ID required.');
             this._send(
-                `🚨 *KILL SWITCH REQUESTED*\n` +
-                `${'─'.repeat(28)}\n` +
-                `This will *immediately pause all three agents*.\n` +
+                `🚨 *Emergency Stop Requested*\n\n` +
+                `This will *immediately pause all agents*.\n` +
                 `Confirm or cancel below.`,
                 {
                     keyboard: {
                         inline_keyboard: [[
-                            { text: '🚨 Confirm KILL ALL', callback_data: 'confirmed:killall' },
-                            { text: '❌ Cancel',           callback_data: 'cmd:cancel' },
+                            { text: '🚨 Confirm Stop All', callback_data: 'confirmed:stopall' },
+                            { text: '❌ Cancel', callback_data: 'cmd:cancel' },
                         ]]
                     }
                 },
@@ -513,16 +511,16 @@ export class TelegramNotifier {
             }
         });
 
-        this.bot.onText(/\/fire(?:\s+(\w+))?/, async (msg: TelegramBot.Message, match) => {
+        this.bot.onText(/\/run(?:\s+(\w+))?/, async (msg: TelegramBot.Message, match) => {
             if (!this._isAdmin(msg)) return this._send('⛔ *Unauthorized* — Admin ID required.');
             const agentId = match?.[1]?.toLowerCase() as AgentId;
-            if (!VALID_AGENTS.includes(agentId)) return this._send('ℹ️ Usage: `/fire rex|nova|sage`');
+            if (!VALID_AGENTS.includes(agentId)) return this._send('ℹ️ Usage: `/run rex|nova|sage`');
             try {
                 await this.orchestrator.triggerCycle(agentId);
-                this._log('CMD_FIRE', { agentId, adminId: msg.from?.id });
-                this._send(`🔥 ${agentLabel(agentId)} *forced cycle* initiated.\n🕐 \`${timestamp()}\``);
+                this._log('CMD_RUN', { agentId, adminId: msg.from?.id });
+                this._send(`⚡ ${agentLabel(agentId)} *action* triggered.\n🕐 \`${timestamp()}\``);
             } catch (err: any) {
-                this._send(`🚫 Force cycle failed for \`${agentId}\`: \`${err.message}\``);
+                this._send(`🚫 Run failed for \`${agentId}\`: \`${err.message}\``);
             }
         });
 
@@ -542,21 +540,20 @@ export class TelegramNotifier {
                 return;
             }
 
-            if (data === 'cmd:status')   { this._reply(query.id, 'Fetching status…');   return this._handleStatusCallback(); }
+            if (data === 'cmd:status') { this._reply(query.id, 'Fetching status…'); return this._handleStatusCallback(); }
             if (data === 'cmd:balances') { this._reply(query.id, 'Fetching balances…'); return this._handleBalancesCallback(); }
-            if (data === 'cmd:control')  { this._reply(query.id, 'Opening control panel.'); return this._send('⚙️ *Fleet Control Panel*', { keyboard: this.getFleetKeyboard() }); }
-            if (data === 'cmd:refresh')  { this._reply(query.id, 'Refreshed.');          return this._handleStatusCallback(); }
-            if (data === 'cmd:cancel')   { this._reply(query.id, '❌ Action cancelled.'); return; }
+            if (data === 'cmd:control') { this._reply(query.id, 'Opening control panel.'); return this._send('⚙️ *Fleet Control Panel*', { keyboard: this.getFleetKeyboard() }); }
+            if (data === 'cmd:refresh') { this._reply(query.id, 'Refreshed.'); return this._handleStatusCallback(); }
+            if (data === 'cmd:cancel') { this._reply(query.id, '❌ Action cancelled.'); return; }
 
-            if (data === 'confirmed:killall') {
+            if (data === 'confirmed:stopall') {
                 try {
                     for (const id of VALID_AGENTS) this.orchestrator.setOperationalStatus(id, 'PAUSED');
-                    this._log('CMD_KILLSWITCH', { adminId: query.from?.id });
-                    this._reply(query.id, '🚨 Kill switch executed.');
+                    this._log('CMD_STOPALL', { adminId: query.from?.id });
+                    this._reply(query.id, '🚨 Emergency stop executed.');
                     this._send(
-                        `🚨 *KILL SWITCH EXECUTED*\n` +
-                        `${'─'.repeat(28)}\n` +
-                        `⏸ All agents paused by admin.\n` +
+                        `🚨 *ALL AGENTS STOPPED*\n\n` +
+                        `⏸ All agents have been paused by admin.\n` +
                         `🕐 \`${timestamp()}\``,
                         { keyboard: this.getFleetKeyboard() },
                     );
@@ -567,7 +564,7 @@ export class TelegramNotifier {
             }
 
             const [action, agentId] = data.split(':') as [string, AgentId];
-            if (['pause', 'resume', 'fire'].includes(action) && VALID_AGENTS.includes(agentId)) {
+            if (['pause', 'resume', 'run'].includes(action) && VALID_AGENTS.includes(agentId)) {
                 return this._executeAgentAction(action, agentId, query.id, query.from?.id);
             }
 
@@ -576,9 +573,9 @@ export class TelegramNotifier {
     }
 
     private async _executeAgentAction(
-        action:       string,
-        agentId:      AgentId,
-        queryId:      string,
+        action: string,
+        agentId: AgentId,
+        queryId: string,
         adminUserId?: number,
     ): Promise<void> {
         try {
@@ -592,11 +589,11 @@ export class TelegramNotifier {
                 this._reply(queryId, `▶️ ${agentId.toUpperCase()} resumed.`);
                 this._log('CMD_RESUME', { agentId, adminId: adminUserId });
                 this._send(`▶️ ${agentLabel(agentId)} *resumed* via control panel.\n🕐 \`${timestamp()}\``, { keyboard: this.getAgentKeyboard(agentId) });
-            } else if (action === 'fire') {
+            } else if (action === 'run') {
                 await this.orchestrator.triggerCycle(agentId);
-                this._reply(queryId, `🔥 ${agentId.toUpperCase()} cycle triggered.`);
-                this._log('CMD_FIRE', { agentId, adminId: adminUserId });
-                this._send(`🔥 ${agentLabel(agentId)} *forced cycle* triggered via panel.\n🕐 \`${timestamp()}\``, { keyboard: this.getAgentKeyboard(agentId) });
+                this._reply(queryId, `⚡ ${agentId.toUpperCase()} action triggered.`);
+                this._log('CMD_RUN', { agentId, adminId: adminUserId });
+                this._send(`⚡ ${agentLabel(agentId)} *action* triggered via Dashboard.\n🕐 \`${timestamp()}\``, { keyboard: this.getAgentKeyboard(agentId) });
             }
         } catch (err: any) {
             this._reply(queryId, `❌ ${action} failed: ${err.message}`, true);
@@ -607,7 +604,7 @@ export class TelegramNotifier {
     private async _handleStatusCallback(): Promise<void> {
         try {
             const map = this.orchestrator.getAgentStatus();
-            let msg = `📊 *FLEET STATUS* _(refreshed)_\n${'─'.repeat(28)}\n`;
+            let msg = `📊 *Agent Status* _(refreshed)_\n`;
             for (const [id, s] of Object.entries(map)) {
                 const active = s.operationalStatus === 'ACTIVE';
                 msg +=
@@ -626,7 +623,7 @@ export class TelegramNotifier {
     private async _handleBalancesCallback(): Promise<void> {
         try {
             const map = this.orchestrator.getAgentStatus();
-            let msg = `💰 *LIVE BALANCES* (approx) _(refreshed)_\n${'─'.repeat(28)}\n`;
+            let msg = `💰 *Agent Balances* _(refreshed)_\n`;
             for (const [id, s] of Object.entries(map)) {
                 let solBal = '_unavailable_';
                 try {
@@ -649,7 +646,7 @@ export class TelegramNotifier {
 
     async stop(): Promise<void> {
         if (this.initialized) {
-            this._send(`🔴 *SOLUS PROTOCOL OFFLINE*\nBot stopped gracefully.\n🕐 \`${timestamp()}\``);
+            this._send(`🔴 *Bot Offline*\nSolus Protocol agent bot has stopped.\n🕐 \`${timestamp()}\``);
             await this.bot.stopPolling();
             this._log('STOPPED');
         }
@@ -661,18 +658,18 @@ export class TelegramNotifier {
 export function createTelegramNotifier(
     orchestrator: AgentOrchestrator,
 ): TelegramNotifier | null {
-    const token   = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId  = process.env.TELEGRAM_CHAT_ID;
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
     const adminId = process.env.TELEGRAM_ADMIN_ID;
 
     if (!token || !chatId) {
         getAuditLogger().log({
             agentId: 'rex',
-            cycle:   0,
-            event:   'TELEGRAM_CONFIG_MISSING',
+            cycle: 0,
+            event: 'TELEGRAM_CONFIG_MISSING',
             data: {
                 message: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — bot disabled',
-                hint:    'Set both env vars to enable Telegram notifications.',
+                hint: 'Set both env vars to enable Telegram notifications.',
             },
         });
         return null;
