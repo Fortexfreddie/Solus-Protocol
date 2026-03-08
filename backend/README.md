@@ -145,7 +145,7 @@ Every step is appended to the audit log.
 Fetches live prices from CoinGecko for SOL, USDC, RAY, and BONK. Calculates momentum divergence spreads between token pairs. Results are cached for 30 seconds and shared across all three agents. On API failure, it falls back to the last cached data with a `stale: true` flag.
 
 ### Layer 1b — Execution Quote
-A Jupiter execution quote is fetched per agent cycle for the highest-momentum candidate pair, providing real slippage and price impact data. Jupiter failure is non-fatal — the cycle continues with CoinGecko data only.
+A Jupiter execution quote is fetched per agent cycle using a rotating pair selection strategy. All non-neutral momentum pairs are ranked by divergence, and each cycle evaluates the next pair in the rotation — ensuring all candidate pairs get real execution data over time rather than repeatedly evaluating the highest-divergence pair, which may have consistently negative executable spreads due to Devnet pool depth. Jupiter failure is non-fatal — the cycle continues with CoinGecko data only.
 
 ### Layer 2 — Strategist (DeepSeek)
 Reads `SKILLS.md` from disk at call time and injects it as the base system prompt. Appends the agent's personality profile (Rex/Nova/Sage). Calls `deepseek-chat` via the OpenAI SDK with a strict JSON output schema. Output is validated with Zod before proceeding. Malformed output ends the cycle cleanly with a logged parse error.

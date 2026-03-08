@@ -14,12 +14,40 @@ function inferSeverity(event: string): AuditSeverity {
 
 function formatMessage(entry: { event: string; data: Record<string, unknown> }): string {
     const d = entry.data;
+
+    // Custom formatting per event type
+    switch (entry.event) {
+        case "TELEGRAM_CMD_PAUSE":
+            return `Admin paused agent ${d.agentId}`;
+        case "TELEGRAM_CMD_RESUME":
+            return `Admin resumed agent ${d.agentId}`;
+        case "AGENT_STATUS_CHANGE":
+            return `Status changed to ${d.newStatus}`;
+        case "PRESCAN_PAIR":
+            return `Pre-scanning ${d.pair} (spread: ${d.spreadPct}%)`;
+        case "ORCHESTRATOR_START":
+            return `Orchestrator started with offset ${d.offset}ms`;
+        case "TELEGRAM_STARTUP":
+            return `Telegram bot started (Admin active: ${d.adminActive})`;
+        case "SYSTEM_START":
+            return `System started at slot ${d.slot} (Kora: ${d.koraConnected})`;
+        case "WS_CONNECT":
+            return `WebSocket connected (${(d.socketId as string)?.slice(0, 8)}...)`;
+    }
+
     // Error events (CYCLE_ERROR, GUARDIAN_SAFETY_VETO, etc.)
     if (d.error && typeof d.error === "string") return d.error.slice(0, 120);
     // AGENT_THINKING — reasoning is nested in decision object
     const decision = d.decision as Record<string, unknown> | undefined;
     if (decision?.reasoning && typeof decision.reasoning === "string")
         return decision.reasoning.slice(0, 120);
+    // GUARDIAN_AUDIT — challenge is nested in audit object
+    const audit = d.audit as Record<string, unknown> | undefined;
+    if (audit?.challenge && typeof audit.challenge === "string")
+        return audit.challenge.slice(0, 120);
+    if (audit?.verdict && typeof audit.verdict === "string" && !audit.challenge)
+        return `Verdict: ${audit.verdict}`;
+
     // Direct message field
     if (d.message && typeof d.message === "string") return d.message;
     if (d.challenge && typeof d.challenge === "string")
@@ -52,6 +80,8 @@ async function fetchAuditLog(): Promise<AuditEntry[]> {
             txLink: entry.data.signature
                 ? `https://explorer.solana.com/tx/${entry.data.signature}?cluster=devnet`
                 : undefined,
+            rawEvent: entry.event,
+            data: entry.data,
         })
     );
 }

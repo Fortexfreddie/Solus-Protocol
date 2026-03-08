@@ -17,59 +17,67 @@
  *
  * WebSocket events emitted by the caller (agent.ts):
  * KORA_SIGNED, TX_SUBMITTED, TX_CONFIRMED, TX_FAILED, BALANCE_UPDATE
+ *
+ * Fix (2025-05): Jupiter v6 Swap API returns V0 versioned transactions exclusively.
+ * The previous submitTransaction() attempted legacy deserialization first. Since
+ * VersionedTransaction.deserialize() throws on a legacy tx and Transaction.from()
+ * throws on a versioned tx, the correct approach is to always deserialize as
+ * VersionedTransaction and never fall back to legacy — Jupiter does not return
+ * legacy transactions. The Vault's partiallySignTransaction() must also accept a
+ * VersionedTransaction, not a legacy Transaction.
  */
 
-import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, VersionedTransaction } from '@solana/web3.js';
 import type { TxConfirmation, StrategistDecision, TokenSymbol } from '../types/agent-types';
 import { getSolanaRPC } from './solana-rpc';
 import { getKoraPaymaster } from './kora-paymaster';
 
-//  Jupiter API constants
+// ─── Jupiter API constants ───────────────────────────────────────────────────
 
 // Jupiter v6 Quote API — used on devnet (prices are sourced from mainnet pools).
 const JUPITER_QUOTE_API = 'https://api.jup.ag/swap/v1/quote';
-const JUPITER_SWAP_API = 'https://api.jup.ag/swap/v1/swap';
+const JUPITER_SWAP_API  = 'https://api.jup.ag/swap/v1/swap';
 
 // Devnet token mint addresses — must match price-oracle.ts TOKEN_MINTS.
 const TOKEN_MINTS: Record<TokenSymbol, string> = {
-    SOL: 'So11111111111111111111111111111111111111112',
+    SOL:  'So11111111111111111111111111111111111111112',
     USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-    RAY: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+    RAY:  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
     BONK: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
 };
 
-const LAMPORTS_PER_SOL = 1_000_000_000;
-const USDC_DECIMALS = 6;
-const RAY_DECIMALS = 6;
-const BONK_DECIMALS = 5;
-const SLIPPAGE_BPS = 50;   // 0.5% slippage tolerance
-const FETCH_TIMEOUT_MS = 10_000;
-const MAX_RETRY = 1;    // Retry once on submission failure (per spec)
+const LAMPORTS_PER_SOL  = 1_000_000_000;
+const USDC_DECIMALS     = 6;
+const RAY_DECIMALS      = 6;
+const BONK_DECIMALS     = 5;
+const SLIPPAGE_BPS      = 50;      // 0.5% slippage tolerance
+const FETCH_TIMEOUT_MS  = 10_000;
+const MAX_RETRY         = 1;       // Retry once on submission failure (per spec)
 
-//  Types -
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface JupiterQuote {
-    inputMint: string;
-    inAmount: string;
-    outputMint: string;
-    outAmount: string;
-    priceImpactPct: string;
-    routePlan: unknown[];
-    slippageBps: number;
-    otherAmountThreshold: string;
+    inputMint:              string;
+    inAmount:               string;
+    outputMint:             string;
+    outAmount:              string;
+    priceImpactPct:         string;
+    routePlan:              unknown[];
+    slippageBps:            number;
+    otherAmountThreshold:   string;
 }
 
 interface JupiterSwapResponse {
-    swapTransaction: string; // base64-encoded versioned transaction
+    swapTransaction: string; // base64-encoded V0 versioned transaction
 }
 
-//  Amount conversion helpers 
+// ─── Amount conversion helpers ───────────────────────────────────────────────
 
 function toBaseUnits(amount: number, token: TokenSymbol): number {
     switch (token) {
-        case 'SOL': return Math.floor(amount * LAMPORTS_PER_SOL);
+        case 'SOL':  return Math.floor(amount * LAMPORTS_PER_SOL);
         case 'USDC': return Math.floor(amount * 10 ** USDC_DECIMALS);
-        case 'RAY': return Math.floor(amount * 10 ** RAY_DECIMALS);
+        case 'RAY':  return Math.floor(amount * 10 ** RAY_DECIMALS);
         case 'BONK': return Math.floor(amount * 10 ** BONK_DECIMALS);
     }
 }
@@ -77,14 +85,14 @@ function toBaseUnits(amount: number, token: TokenSymbol): number {
 function fromBaseUnits(amount: string, token: TokenSymbol): number {
     const n = parseInt(amount, 10);
     switch (token) {
-        case 'SOL': return n / LAMPORTS_PER_SOL;
+        case 'SOL':  return n / LAMPORTS_PER_SOL;
         case 'USDC': return n / 10 ** USDC_DECIMALS;
-        case 'RAY': return n / 10 ** RAY_DECIMALS;
+        case 'RAY':  return n / 10 ** RAY_DECIMALS;
         case 'BONK': return n / 10 ** BONK_DECIMALS;
     }
 }
 
-//  HTTP helper -
+// ─── HTTP helper ─────────────────────────────────────────────────────────────
 
 async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
     const controller = new AbortController();
@@ -96,7 +104,7 @@ async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Res
     }
 }
 
-//  BroadcastService class 
+// ─── BroadcastService class ───────────────────────────────────────────────────
 
 export class BroadcastService {
     private readonly connection: Connection;
@@ -105,21 +113,24 @@ export class BroadcastService {
         this.connection = getSolanaRPC().getConnection();
     }
 
-    //  Public API 
+    // ─── Public API ───────────────────────────────────────────────────────────
 
     /**
      * Executes the full Layer 6 + Layer 7 swap pipeline for one approved decision.
      *
      * Steps:
      * 1. Get Jupiter quote
-     * 2. Get swap transaction bytes from Jupiter
-     * 3. Vault partial signs (agent proves intent, Layer 6)
+     * 2. Get swap transaction bytes from Jupiter (always V0 versioned format)
+     * 3. Deserialize as VersionedTransaction and pass raw bytes to Vault for partial sign
      * 4. Kora co-signs as fee payer (Layer 7)
      * 5. Submit and confirm on Devnet
      *
+     * Jupiter v6 always returns V0 versioned transactions. Legacy Transaction.from()
+     * is never used here — it would throw on versioned bytes and is not a valid fallback.
+     *
      * @param decision         - The final approved decision from the Policy Engine
      * @param agentPublicKey   - Agent's base58 public key (for Jupiter userPublicKey)
-     * @param partialSign      - Vault callback: serialized tx → base64 partially-signed tx
+     * @param partialSign      - Vault callback: raw tx bytes → base64 partially-signed tx
      * @returns TxConfirmation with signature, amounts, and timestamp
      * @throws on quote failure, signing failure, or unconfirmed after retry
      */
@@ -135,20 +146,26 @@ export class BroadcastService {
                 // Step 1 — Jupiter quote
                 const quote = await this.getQuote(decision);
 
-                // Step 2 — Jupiter swap transaction bytes
+                // Step 2 — Jupiter swap transaction bytes (V0 versioned format)
                 const swapTxBase64 = await this.getSwapTransaction(quote, agentPublicKey);
-                const swapTxBytes = Buffer.from(swapTxBase64, 'base64');
+                const swapTxBytes  = Buffer.from(swapTxBase64, 'base64');
 
-                // Step 3 — Vault partial sign (Layer 6)
+                // Step 3 — Validate it deserializes as a VersionedTransaction before
+                // passing to the Vault. This catches any unexpected format early with
+                // a clear error message rather than a cryptic signing failure.
+                VersionedTransaction.deserialize(new Uint8Array(swapTxBytes));
+
+                // Pass the raw bytes to the Vault for partial signing.
+                // The Vault's partiallySignTransaction() must handle VersionedTransaction.
                 const agentSignedBase64 = await partialSign(new Uint8Array(swapTxBytes));
 
                 // Step 4 — Kora co-sign as fee payer (Layer 7)
-                const kora = getKoraPaymaster();
-                const koraResult = await kora.cosign(agentSignedBase64);
+                const kora        = getKoraPaymaster();
+                const koraResult  = await kora.cosign(agentSignedBase64);
 
                 // Step 5 — Submit to Devnet RPC
                 const fullySignedBytes = Buffer.from(koraResult.signedTransaction, 'base64');
-                const signature = await this.submitTransaction(fullySignedBytes);
+                const signature        = await this.submitTransaction(new Uint8Array(fullySignedBytes));
 
                 // Step 6 — Confirm via SolanaRPC (30s timeout per spec)
                 await getSolanaRPC().confirmTransaction(signature);
@@ -157,16 +174,16 @@ export class BroadcastService {
 
                 const txConfirmation: TxConfirmation = {
                     signature,
-                    fromToken: decision.fromToken,
-                    toToken: decision.toToken,
-                    amount: decision.amount,
-                    output: outAmount,
+                    fromToken:   decision.fromToken,
+                    toToken:     decision.toToken,
+                    amount:      decision.amount,
+                    output:      outAmount,
                     confirmedAt: Date.now(),
                 };
 
                 return {
                     signature,
-                    confirmation: txConfirmation,
+                    confirmation:      txConfirmation,
                     koraSignerAddress: koraResult.koraSignerAddress,
                 };
 
@@ -184,24 +201,22 @@ export class BroadcastService {
         throw new Error('[BroadcastService] Unexpected execution path.');
     }
 
-    //  Jupiter integration 
+    // ─── Jupiter integration ──────────────────────────────────────────────────
 
     private async getQuote(decision: StrategistDecision): Promise<JupiterQuote> {
-        const inputMint = TOKEN_MINTS[decision.fromToken];
+        const inputMint  = TOKEN_MINTS[decision.fromToken];
         const outputMint = TOKEN_MINTS[decision.toToken];
-        const amount = toBaseUnits(decision.amount, decision.fromToken);
+        const amount     = toBaseUnits(decision.amount, decision.fromToken);
 
         const params = new URLSearchParams({
             inputMint,
             outputMint,
-            amount: String(amount),
+            amount:      String(amount),
             slippageBps: String(SLIPPAGE_BPS),
         });
 
         const response = await fetchWithTimeout(`${JUPITER_QUOTE_API}?${params.toString()}`, {
-            headers: {
-                'x-api-key': process.env.JUPITER_API_KEY || ''
-            }
+            headers: { 'x-api-key': process.env.JUPITER_API_KEY || '' },
         });
 
         if (!response.ok) {
@@ -217,18 +232,18 @@ export class BroadcastService {
         userPublicKey: string,
     ): Promise<string> {
         const body = {
-            quoteResponse: quote,
+            quoteResponse:            quote,
             userPublicKey,
-            wrapAndUnwrapSol: true,
-            dynamicComputeUnitLimit: true,
-            dynamicSlippage: { maxBps: 300 },
+            wrapAndUnwrapSol:         true,
+            dynamicComputeUnitLimit:  true,
+            dynamicSlippage:          { maxBps: 300 },
         };
 
         const response = await fetchWithTimeout(JUPITER_SWAP_API, {
-            method: 'POST',
-            headers: { 
+            method:  'POST',
+            headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': process.env.JUPITER_API_KEY || ''
+                'x-api-key':    process.env.JUPITER_API_KEY || '',
             },
             body: JSON.stringify(body),
         });
@@ -242,32 +257,30 @@ export class BroadcastService {
         return data.swapTransaction;
     }
 
-    //  RPC submission -
+    // ─── RPC submission ───────────────────────────────────────────────────────
 
+    /**
+     * Submits a fully signed V0 versioned transaction to Devnet.
+     *
+     * Jupiter v6 exclusively returns V0 versioned transactions. There is no
+     * legacy fallback — legacy Transaction.from() would throw on versioned bytes
+     * and represents a different signing model (no address lookup tables).
+     */
     private async submitTransaction(signedTxBytes: Uint8Array): Promise<string> {
-        try {
-            const versionedTx = VersionedTransaction.deserialize(signedTxBytes);
-            return await this.connection.sendRawTransaction(versionedTx.serialize(), {
-                skipPreflight: false,
-                preflightCommitment: 'confirmed',
-                maxRetries: 3,
-            });
-        } catch {
-            const legacyTx = Transaction.from(signedTxBytes);
-            return await this.connection.sendRawTransaction(legacyTx.serialize(), {
-                skipPreflight: false,
-                preflightCommitment: 'confirmed',
-                maxRetries: 3,
-            });
-        }
+        const versionedTx = VersionedTransaction.deserialize(signedTxBytes);
+        return await this.connection.sendRawTransaction(versionedTx.serialize(), {
+            skipPreflight:       false,
+            preflightCommitment: 'confirmed',
+            maxRetries:          3,
+        });
     }
 }
 
-//  Singleton ─
+// ─── Singleton ────────────────────────────────────────────────────────────────
 
 export const broadcastService = new BroadcastService();
 
-//  Utilities ─
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

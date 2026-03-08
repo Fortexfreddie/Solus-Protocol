@@ -3,8 +3,8 @@
  * Single autonomous agent — runs the complete 7-layer Air-Gap Engine each cycle.
  *
  * One Agent instance per agent identity (Rex, Nova, Sage). Each instance holds
- * its own Vault, personality profile, and cycle counter. Agents are completely
- * isolated — no shared mutable state between them.
+ * its own Vault, personality profile, cycle counter, and pair rotation index.
+ * Agents are completely isolated — no shared mutable state between them.
  *
  * The runCycle() method is the authoritative implementation of the decision flow
  * described in the master workflow spec. It emits WebSocket events at every layer
@@ -12,8 +12,10 @@
  *
  * Cycle flow:
  *   Layer 1   — CoinGecko prices + spread calculation
- *   Layer 1b  — Jupiter pre-scan: fetch execution quote for best momentum pair
- *               so the Strategist has real executable data before deciding.
+ *   Layer 1b  — Jupiter pre-scan: fetch execution quote for the NEXT pair in
+ *               the rotation so the Strategist has real executable data before
+ *               deciding. Rotation prevents all agents from evaluating the same
+ *               pair every cycle when one pair consistently has negative spreads.
  *   Layer 2   — Strategist (DeepSeek) decides with Jupiter quote in context
  *   Layer 1c  — Re-fetch Jupiter quote for actual decided pair (if different from pre-scan)
  *   Layer 3   — Guardian AI (Gemini) audits with correct quote for proposed trade
@@ -21,6 +23,26 @@
  *   Layer 5   — Proof-of-Reasoning anchored on-chain
  *   Layer 6   — Vault AES-256-GCM decrypt + partial sign
  *   Layer 7   — Kora co-sign + broadcast + confirmation
+ *
+ * Pair Rotation Strategy (Layer 1b)
+ * ───────────────────────────────────
+ * The previous implementation always picked the highest momentum divergence pair
+ * for the pre-scan. In practice, USDC→RAY consistently had the highest CoinGecko
+ * divergence but consistently negative Jupiter net spreads on Devnet — causing
+ * every agent to HOLD every cycle because the 4-step Decision Rule correctly
+ * rejects a negative executable spread at Step 1.
+ *
+ * The fix: maintain a per-agent rotation index across cycles. On each cycle, the
+ * agent evaluates the NEXT non-neutral pair in the sorted rotation list. This
+ * ensures all candidate pairs get evaluated over time:
+ *   Cycle 1: highest divergence pair  (e.g. USDC→RAY)
+ *   Cycle 2: second highest           (e.g. BONK→SOL)
+ *   Cycle 3: third highest            (e.g. SOL→USDC)
+ *   Cycle 4: wraps back to highest    (e.g. USDC→RAY)
+ *
+ * The rotation list is rebuilt each cycle from live spread data so it always
+ * reflects current momentum — a pair that was third highest last cycle may be
+ * first this cycle if market conditions changed.
  *
  * Cycle outcomes (any layer can end the cycle cleanly):
  *   LLM_PARSE_ERROR  — Strategist returned invalid JSON
@@ -49,23 +71,38 @@ import type {
     TxRecord,
 } from '../types/agent-types';
 
-//  Constants 
+// ─── Constants ─────────────────────────────────────────────────────────────────
 
 const MASTER_KEY = process.env.VAULT_MASTER_KEY ?? '';
-const RPC_URL = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
+const RPC_URL    = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 
-//  Agent class 
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface CandidatePair {
+    from:      string;
+    to:        string;
+    spreadPct: number;
+}
+
+// ─── Agent class ───────────────────────────────────────────────────────────────
 
 export class Agent {
-    private readonly agentId: AgentId;
-    private readonly profile: PersonalityProfile;
-    private readonly vault: Vault;
+    private readonly agentId:  AgentId;
+    private readonly profile:  PersonalityProfile;
+    private readonly vault:    Vault;
     private cycleCount = 0;
+
+    /**
+     * Rotation index for the Layer 1b pair pre-scan.
+     * Advances by 1 on every cycle, wrapping around the candidate list length.
+     * Per-instance so Rex, Nova, and Sage rotate independently.
+     */
+    private prescanRotationIndex = 0;
 
     private constructor(profile: PersonalityProfile, vault: Vault) {
         this.agentId = profile.agentId;
         this.profile = profile;
-        this.vault = vault;
+        this.vault   = vault;
     }
 
     /**
@@ -77,13 +114,13 @@ export class Agent {
         return new Agent(profile, vault);
     }
 
-    getAgentId(): AgentId { return this.agentId; }
-    getProfile(): PersonalityProfile { return this.profile; }
-    getCycleCount(): number { return this.cycleCount; }
-    getPublicKey(): string { return this.vault.getPublicKey().toBase58(); }
-    async getBalance() { return this.vault.getBalance(); }
+    getAgentId():    AgentId           { return this.agentId; }
+    getProfile():    PersonalityProfile { return this.profile; }
+    getCycleCount(): number             { return this.cycleCount; }
+    getPublicKey():  string             { return this.vault.getPublicKey().toBase58(); }
+    async getBalance()                  { return this.vault.getBalance(); }
 
-    //  Main cycle
+    // ─── Main cycle ────────────────────────────────────────────────────────────
 
     /**
      * Executes one complete 7-layer Air-Gap Engine cycle.
@@ -94,65 +131,80 @@ export class Agent {
      */
     async runCycle(): Promise<void> {
         this.cycleCount++;
-        const cycle = this.cycleCount;
+        const cycle  = this.cycleCount;
         const logger = getAuditLogger();
 
         eventBus.emit('AGENT_STATUS', this.agentId, {
-            status: 'cycle_start',
+            status:    'cycle_start',
             cycle,
             publicKey: this.vault.getPublicKey().toBase58(),
         });
 
         try {
-            //  Layer 1: Price Oracle 
+            // ── Layer 1: Price Oracle ─────────────────────────────────────────
             // Fetch CoinGecko prices and calculate momentum divergence spreads.
-            // Result is a shallow copy so we can attach executionQuote later.
+            // Shallow copy so we can safely attach executionQuote below.
             const priceData: PriceData = { ...await getPriceOracle().getPrices() };
 
-            //  Layer 1b: Jupiter Pre-scan
-            // Identify the best momentum pair and fetch a real Jupiter execution
-            // quote BEFORE the Strategist runs. This gives DeepSeek actual
-            // execution data (net spread after slippage) in its prompt so it can
-            // apply the Decision Rule correctly — rather than reasoning about
-            // momentum divergence and mislabelling it as a "Jupiter net spread".
+            // ── Layer 1b: Jupiter Pre-scan (rotated) ──────────────────────────
+            // Build the sorted candidate list and select the pair at the current
+            // rotation index. Advance the index for next cycle regardless of
+            // whether Jupiter succeeds — rotation must be unconditional so
+            // a repeated Jupiter failure on one pair cannot stall the rotation.
             //
             // Non-fatal: if Jupiter fails the cycle continues without a quote
-            // and the Strategist falls back to momentum divergence as per SKILLS.md.
-            const prescanPair = this.getBestMomentumPair(priceData);
-            if (prescanPair) {
+            // and the Strategist falls back to momentum divergence per SKILLS.md.
+            const candidates = this.buildCandidateList(priceData);
+
+            if (candidates.length > 0) {
+                // Clamp index in case the candidate list shrank since last cycle.
+                const idx     = this.prescanRotationIndex % candidates.length;
+                const prescan = candidates[idx];
+
+                // Advance rotation index BEFORE the await so a Jupiter timeout
+                // or error still moves the rotation forward on the next cycle.
+                this.prescanRotationIndex = (idx + 1) % candidates.length;
+
+                logger.log({
+                    agentId: this.agentId,
+                    cycle,
+                    event:   'PRESCAN_PAIR',
+                    data:    { pair: `${prescan.from}→${prescan.to}`, rotationIndex: idx, spreadPct: prescan.spreadPct },
+                });
+
                 const prescanQuote = await getPriceOracle().getExecutionQuote(
-                    prescanPair.from,
-                    prescanPair.to,
+                    prescan.from,
+                    prescan.to,
                     0.1, // representative amount — not the final tx size
-                    priceData.prices[prescanPair.from as TokenSymbol]?.usd ?? 0,
-                    priceData.prices[prescanPair.to as TokenSymbol]?.usd ?? 0,
+                    priceData.prices[prescan.from as TokenSymbol]?.usd ?? 0,
+                    priceData.prices[prescan.to  as TokenSymbol]?.usd ?? 0,
                 );
                 priceData.executionQuote = prescanQuote;
             }
 
             // Emit Layer 1 event — includes pre-scan quote if available.
             eventBus.emit('PRICE_FETCHED', this.agentId, {
-                prices: priceData.prices,
+                prices:  priceData.prices,
                 spreads: priceData.spreads,
-                stale: priceData.stale,
+                stale:   priceData.stale,
                 executionQuote: priceData.executionQuote
                     ? priceData.executionQuote.error
                         ? { error: priceData.executionQuote.error }
                         : {
-                            pair: `${priceData.executionQuote.fromToken}→${priceData.executionQuote.toToken}`,
-                            impliedPrice: priceData.executionQuote.impliedPrice,
-                            netSpreadVsMarket: priceData.executionQuote.netSpreadVsMarket,
-                            worthTrading: priceData.executionQuote.worthTrading,
-                            priceImpactPct: priceData.executionQuote.priceImpactPct,
+                            pair:               `${priceData.executionQuote.fromToken}→${priceData.executionQuote.toToken}`,
+                            impliedPrice:       priceData.executionQuote.impliedPrice,
+                            netSpreadVsMarket:  priceData.executionQuote.netSpreadVsMarket,
+                            worthTrading:       priceData.executionQuote.worthTrading,
+                            priceImpactPct:     priceData.executionQuote.priceImpactPct,
                         }
                     : undefined,
             });
 
-            //  Layer 2: Strategist (DeepSeek) 
-            // Strategist now receives priceData with executionQuote populated.
-            // It can apply the 4-step Decision Rule from SKILLS.md correctly.
-            const balance = await this.vault.getBalance();
-            const txHistory = logger.getLastNTransactions(5, this.agentId);
+            // ── Layer 2: Strategist (DeepSeek) ────────────────────────────────
+            // Strategist receives priceData with executionQuote populated for the
+            // rotated pair. It applies the 4-step Decision Rule from SKILLS.md.
+            const balance    = await this.vault.getBalance();
+            const txHistory  = logger.getLastNTransactions(5, this.agentId);
 
             const strategistResult = await strategistService.reason(
                 this.agentId, this.profile, priceData, balance, txHistory, cycle,
@@ -160,7 +212,7 @@ export class Agent {
 
             if (!strategistResult.ok) {
                 eventBus.emit('LLM_PARSE_ERROR', this.agentId, {
-                    error: strategistResult.error,
+                    error:     strategistResult.error,
                     rawOutput: strategistResult.rawOutput,
                 });
                 logger.log({
@@ -174,13 +226,13 @@ export class Agent {
             let decision: StrategistDecision = { ...strategistResult.decision };
 
             eventBus.emit('AGENT_THINKING', this.agentId, {
-                decision: decision.decision,
-                fromToken: decision.fromToken,
-                toToken: decision.toToken,
-                amount: decision.amount,
-                reasoning: decision.reasoning,
+                decision:   decision.decision,
+                fromToken:  decision.fromToken,
+                toToken:    decision.toToken,
+                amount:     decision.amount,
+                reasoning:  decision.reasoning,
                 confidence: decision.confidence,
-                riskFlags: decision.riskFlags,
+                riskFlags:  decision.riskFlags,
             });
 
             logger.log({
@@ -188,16 +240,16 @@ export class Agent {
                 data: { decision, rawOutput: strategistResult.rawOutput },
             });
 
-            //  Layer 1c: Re-fetch Jupiter quote for actual decided pair 
-            // If the Strategist decided to SWAP a different pair than the pre-scan,
-            // fetch a precise execution quote for the exact pair and amount.
-            // If the pre-scan pair already matches, skip the extra API call.
+            // ── Layer 1c: Re-fetch Jupiter quote for actual decided pair ───────
+            // If the Strategist chose a different pair than the pre-scan, fetch
+            // a precise quote for the exact pair and amount before Guardian runs.
+            // If the pairs match, skip the extra API call entirely.
             if (decision.decision === 'SWAP') {
                 const alreadyCorrectPair =
-                    priceData.executionQuote &&
-                    !priceData.executionQuote.error &&
-                    priceData.executionQuote.fromToken === decision.fromToken &&
-                    priceData.executionQuote.toToken === decision.toToken;
+                    priceData.executionQuote                                   &&
+                    !priceData.executionQuote.error                            &&
+                    priceData.executionQuote.fromToken === decision.fromToken  &&
+                    priceData.executionQuote.toToken   === decision.toToken;
 
                 if (!alreadyCorrectPair) {
                     const finalQuote = await getPriceOracle().getExecutionQuote(
@@ -205,39 +257,37 @@ export class Agent {
                         decision.toToken,
                         decision.amount,
                         priceData.prices[decision.fromToken as TokenSymbol]?.usd ?? 0,
-                        priceData.prices[decision.toToken as TokenSymbol]?.usd ?? 0,
+                        priceData.prices[decision.toToken   as TokenSymbol]?.usd ?? 0,
                     );
                     priceData.executionQuote = finalQuote;
 
-                    // Re-emit PRICE_FETCHED with the corrected quote so the
-                    // dashboard Layer 1 display shows the actual trade quote.
+                    // Re-emit PRICE_FETCHED so the dashboard reflects the corrected quote.
                     eventBus.emit('PRICE_FETCHED', this.agentId, {
-                        prices: priceData.prices,
+                        prices:  priceData.prices,
                         spreads: priceData.spreads,
-                        stale: priceData.stale,
+                        stale:   priceData.stale,
                         executionQuote: finalQuote.error
                             ? { error: finalQuote.error }
                             : {
-                                pair: `${finalQuote.fromToken}→${finalQuote.toToken}`,
-                                impliedPrice: finalQuote.impliedPrice,
+                                pair:              `${finalQuote.fromToken}→${finalQuote.toToken}`,
+                                impliedPrice:      finalQuote.impliedPrice,
                                 netSpreadVsMarket: finalQuote.netSpreadVsMarket,
-                                worthTrading: finalQuote.worthTrading,
-                                priceImpactPct: finalQuote.priceImpactPct,
+                                worthTrading:      finalQuote.worthTrading,
+                                priceImpactPct:    finalQuote.priceImpactPct,
                             },
                     });
                 }
             }
 
-            //  Layer 3: Guardian AI (Gemini) 
-            // Guardian receives the correct execution quote for the proposed trade.
+            // ── Layer 3: Guardian AI (Gemini) ─────────────────────────────────
+            // Guardian receives the Layer 1c corrected quote for the proposed trade.
             const guardianResult = await guardianService.audit(
                 this.profile, decision, priceData, balance, cycle,
             );
 
             if (!guardianResult.ok) {
-                // Safety veto — Gemini was unreachable or returned invalid output.
                 eventBus.emit('GUARDIAN_AUDIT', this.agentId, {
-                    verdict: 'VETO',
+                    verdict:   'VETO',
                     challenge: guardianResult.error,
                 });
                 logger.log({
@@ -250,8 +300,8 @@ export class Agent {
             const { audit } = guardianResult;
 
             eventBus.emit('GUARDIAN_AUDIT', this.agentId, {
-                verdict: audit.verdict,
-                challenge: audit.challenge,
+                verdict:        audit.verdict,
+                challenge:      audit.challenge,
                 modifiedAmount: audit.modifiedAmount ?? undefined,
             });
 
@@ -260,17 +310,15 @@ export class Agent {
                 data: { audit, rawOutput: guardianResult.rawOutput },
             });
 
-            if (audit.verdict === 'VETO') {
-                return;
-            }
+            if (audit.verdict === 'VETO') return;
 
             if (audit.verdict === 'MODIFY' && audit.modifiedAmount !== null) {
                 decision = { ...decision, amount: audit.modifiedAmount };
             }
 
-            //  Layer 4: Policy Engine (9 deterministic checks) 
+            // ── Layer 4: Policy Engine (9 deterministic checks) ───────────────
             const dailyVolume = logger.getDailyVolumeSOL(this.agentId);
-            const bestSpread = Math.max(
+            const bestSpread  = Math.max(
                 ...Object.values(priceData.spreads).map((s) => s.spreadPct),
             );
 
@@ -280,11 +328,11 @@ export class Agent {
 
             const policyEvent = policyResult.approved ? 'POLICY_PASS' : 'POLICY_FAIL';
             eventBus.emit(policyEvent, this.agentId, {
-                checks: policyResult.checks,
-                approved: policyResult.approved,
-                outcome: policyResult.outcome,
-                failedOn: policyResult.failedOn,
-                reason: policyResult.reason,
+                checks:        policyResult.checks,
+                approved:      policyResult.approved,
+                outcome:       policyResult.outcome,
+                failedOn:      policyResult.failedOn,
+                reason:        policyResult.reason,
                 finalDecision: policyResult.finalDecision,
             });
 
@@ -293,11 +341,9 @@ export class Agent {
                 data: { outcome: policyResult.outcome, failedOn: policyResult.failedOn },
             });
 
-            if (!policyResult.approved) {
-                return;
-            }
+            if (!policyResult.approved) return;
 
-            // Use the (possibly clamped) finalDecision from Policy Engine onwards.
+            // Use the Policy Engine's (possibly clamped) finalDecision from here on.
             const finalDecision = policyResult.finalDecision;
 
             // HOLD/SKIP decisions end cleanly here — no proof, no tx.
@@ -306,7 +352,7 @@ export class Agent {
                 return;
             }
 
-            //  Layer 5: Proof-of-Reasoning 
+            // ── Layer 5: Proof-of-Reasoning ───────────────────────────────────
             const proofRecord = await proofService.anchor(
                 this.agentId,
                 cycle,
@@ -318,29 +364,29 @@ export class Agent {
             );
 
             eventBus.emit('PROOF_ANCHORED', this.agentId, {
-                hash: proofRecord.hash,
-                memoSignature: proofRecord.memoSignature,
+                hash:           proofRecord.hash,
+                memoSignature:  proofRecord.memoSignature,
                 payloadSummary: proofRecord.payloadSummary,
             });
 
             logger.log({
                 agentId: this.agentId, cycle, event: 'PROOF_ANCHORED',
                 data: {
-                    hash: proofRecord.hash,
-                    memoSignature: proofRecord.memoSignature,
+                    hash:           proofRecord.hash,
+                    memoSignature:  proofRecord.memoSignature,
                     payloadSummary: proofRecord.payloadSummary,
-                    payload: proofRecord.payload,
+                    payload:        proofRecord.payload,
                 },
             });
 
-            //  Layer 6: Vault signing
+            // ── Layer 6: Vault signing ────────────────────────────────────────
             eventBus.emit('TX_SIGNING', this.agentId, {
                 fromToken: finalDecision.fromToken,
-                toToken: finalDecision.toToken,
-                amount: finalDecision.amount,
+                toToken:   finalDecision.toToken,
+                amount:    finalDecision.amount,
             });
 
-            //  Layer 7: Kora co-sign + Broadcast
+            // ── Layer 7: Kora co-sign + Broadcast ────────────────────────────
             try {
                 const { signature, confirmation, koraSignerAddress } =
                     await broadcastService.executeSwap(
@@ -349,35 +395,28 @@ export class Agent {
                         this.vault.partiallySignTransaction.bind(this.vault),
                     );
 
-                eventBus.emit('KORA_SIGNED', this.agentId, {
-                    agentId: this.agentId,
-                    koraSignerAddress,
-                });
-
-                eventBus.emit('TX_SUBMITTED', this.agentId, { signature });
-
-                eventBus.emit('TX_CONFIRMED', this.agentId, {
+                eventBus.emit('KORA_SIGNED',    this.agentId, { agentId: this.agentId, koraSignerAddress });
+                eventBus.emit('TX_SUBMITTED',   this.agentId, { signature });
+                eventBus.emit('TX_CONFIRMED',   this.agentId, {
                     signature,
                     fromToken: confirmation.fromToken,
-                    toToken: confirmation.toToken,
-                    amount: confirmation.amount,
-                    output: confirmation.output,
+                    toToken:   confirmation.toToken,
+                    amount:    confirmation.amount,
+                    output:    confirmation.output,
                 });
 
-                // Update balances post-swap.
                 const updatedBalance = await this.vault.getBalance();
                 eventBus.emit('BALANCE_UPDATE', this.agentId, {
-                    sol: updatedBalance.sol,
+                    sol:    updatedBalance.sol,
                     tokens: updatedBalance.tokens,
                 });
 
-                // Write the confirmed TxRecord to the vault history and audit log.
                 const txRecord: TxRecord = {
                     signature,
-                    agentId: this.agentId,
+                    agentId:   this.agentId,
                     fromToken: confirmation.fromToken,
-                    toToken: confirmation.toToken,
-                    amountIn: confirmation.amount,
+                    toToken:   confirmation.toToken,
+                    amountIn:  confirmation.amount,
                     amountOut: confirmation.output,
                     timestamp: confirmation.confirmedAt,
                     cycle,
@@ -391,7 +430,7 @@ export class Agent {
                     data: {
                         ...txRecord,
                         koraSignerAddress,
-                        proofHash: proofRecord.hash,
+                        proofHash:     proofRecord.hash,
                         memoSignature: proofRecord.memoSignature,
                     },
                 });
@@ -399,8 +438,8 @@ export class Agent {
             } catch (txErr) {
                 eventBus.emit('TX_FAILED', this.agentId, {
                     signature: '',
-                    error: (txErr as Error).message,
-                    retrying: false,
+                    error:     (txErr as Error).message,
+                    retrying:  false,
                 });
                 logger.log({
                     agentId: this.agentId, cycle, event: 'TX_FAILED',
@@ -410,7 +449,6 @@ export class Agent {
             }
 
         } catch (err) {
-            // Unexpected error in any layer — log and end cycle cleanly.
             logger.log({
                 agentId: this.agentId, cycle, event: 'CYCLE_ERROR',
                 data: { error: (err as Error).message, stack: (err as Error).stack },
@@ -423,37 +461,43 @@ export class Agent {
         }
     }
 
-    //  Private helpers 
+    // ─── Private helpers ───────────────────────────────────────────────────────
 
     /**
-     * Finds the token pair with the highest momentum divergence that has a
-     * clear direction (not neutral). Used for the Layer 1b Jupiter pre-scan
-     * so the Strategist always receives a real execution quote before deciding.
+     * Builds a sorted list of non-neutral candidate pairs for the Layer 1b
+     * pre-scan rotation, ordered by descending momentum divergence.
      *
-     * Returns the pair in trade direction order:
-     *   overpriced token = fromToken (sell it)
-     *   underpriced token = toToken  (buy it)
+     * Each entry includes the trade direction:
+     *   fromToken = overpriced token (sell it)
+     *   toToken   = underpriced token (buy it)
      *
-     * Returns null if all pairs are neutral — no pre-scan needed.
+     * Returns an empty array if all pairs are neutral — no pre-scan needed.
+     *
+     * The list is rebuilt from live spread data every cycle so it always
+     * reflects current momentum conditions. A pair that was second-highest
+     * last cycle may be first-highest this cycle.
      */
-    private getBestMomentumPair(priceData: PriceData): { from: string; to: string } | null {
-        let bestSpread = 0;
-        let bestPair: { from: string; to: string } | null = null;
+    private buildCandidateList(priceData: PriceData): CandidatePair[] {
+        const candidates: CandidatePair[] = [];
 
         for (const [key, spread] of Object.entries(priceData.spreads)) {
             if (spread.direction === 'neutral') continue;
-            if (spread.spreadPct <= bestSpread) continue;
 
-            bestSpread = spread.spreadPct;
             const [tokenA, tokenB] = key.split('_') as [string, string];
 
-            // direction is either `${tokenA}_overpriced` or `${tokenB}_overpriced`
-            // Sell the overpriced token: fromToken = overpriced, toToken = underpriced
-            bestPair = spread.direction.startsWith(tokenA)
-                ? { from: tokenA, to: tokenB }
-                : { from: tokenB, to: tokenA };
+            // Sell the overpriced token: fromToken = overpriced, toToken = underpriced.
+            const pair: CandidatePair = spread.direction.startsWith(tokenA)
+                ? { from: tokenA, to: tokenB, spreadPct: spread.spreadPct }
+                : { from: tokenB, to: tokenA, spreadPct: spread.spreadPct };
+
+            candidates.push(pair);
         }
 
-        return bestPair;
+        // Sort descending by momentum divergence so the highest-signal pairs
+        // are evaluated most frequently (they appear at lower rotation indices
+        // and are visited first on each full rotation).
+        candidates.sort((a, b) => b.spreadPct - a.spreadPct);
+
+        return candidates;
     }
 }

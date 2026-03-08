@@ -128,6 +128,8 @@ export interface AuditEntry {
     message: string;
     severity: AuditSeverity;
     txLink?: string;
+    rawEvent: string;
+    data: Record<string, unknown>;
 }
 
 // ─── Proof-of-Reasoning ───────────────────────────────────────────────────────

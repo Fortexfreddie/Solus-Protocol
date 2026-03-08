@@ -181,29 +181,25 @@ The Price Oracle is the data foundation of every agent cycle. Its job is to prov
 
 This is the architectural decision that makes the Strategist reliable. Without it, DeepSeek receives only momentum divergence data and no real execution quote. In testing, this caused DeepSeek to consistently mislabel the divergence value as a "Jupiter net spread" in its reasoning — producing plausible-sounding but numerically wrong output that Gemini vetoed every cycle.
 
-Before the Strategist runs, `getBestMomentumPair()` identifies the token pair with the highest non-neutral momentum divergence and fetches a representative 0.1 SOL equivalent Jupiter execution quote for it:
+Before the Strategist runs, `buildCandidateList()` collects all non-neutral momentum pairs sorted by descending divergence, and the agent selects the pair at its current `prescanRotationIndex` — advancing the index each cycle. This rotation ensures all candidate pairs receive real execution quotes over time. Without it, the highest-divergence pair (e.g. USDC→RAY) monopolized every pre-scan slot despite consistently producing negative Jupiter net spreads on Devnet — causing every agent to HOLD every cycle because Step 1 of the Decision Rule correctly rejects negative executable sprea
 
 ```typescript
-private getBestMomentumPair(priceData: PriceData): { from: string; to: string } | null {
-    let bestSpread = 0;
-    let bestPair: { from: string; to: string } | null = null;
-
+private buildCandidateList(priceData: PriceData): CandidatePair[] {
+    const candidates: CandidatePair[] = [];
     for (const [key, spread] of Object.entries(priceData.spreads)) {
         if (spread.direction === 'neutral') continue;
-        if (spread.spreadPct <= bestSpread) continue;
-
-        bestSpread = spread.spreadPct;
         const [tokenA, tokenB] = key.split('_') as [string, string];
-
-        bestPair = spread.direction.startsWith(tokenA)
-            ? { from: tokenA, to: tokenB }
-            : { from: tokenB, to: tokenA };
+        const pair: CandidatePair = spread.direction.startsWith(tokenA)
+            ? { from: tokenA, to: tokenB, spreadPct: spread.spreadPct }
+            : { from: tokenB, to: tokenA, spreadPct: spread.spreadPct };
+        candidates.push(pair);
     }
-    return bestPair;
+    candidates.sort((a, b) => b.spreadPct - a.spreadPct);
+    return candidates;
 }
 ```
 
-The resulting quote is attached to `priceData.executionQuote` before the Strategist prompt is constructed. DeepSeek now sees both signals: the momentum divergence (which pair to consider) and the real net spread (whether execution is profitable). If all pairs are neutral, `getBestMomentumPair()` returns null and no API call is made.
+The resulting quote is attached to `priceData.executionQuote` before the Strategist prompt is constructed. DeepSeek now sees both signals: the momentum divergence (which pair to consider) and the real net spread (whether execution is profitable). If all pairs are neutral, `buildCandidateList()` returns null and no API call is made.
 
 ### Layer 1c — Quote Correction
 
@@ -761,6 +757,7 @@ Jupiter's swap routing API references mainnet liquidity pools. These pools do no
 ### Momentum Divergence vs. Executable Spread
 
 The momentum divergence signal from CoinGecko and the executable net spread from Jupiter frequently differ by a significant margin. In testing, a 0.63% CoinGecko momentum divergence for SOL/USDC corresponded to a 0.058% Jupiter net spread — a tenfold difference. The pipeline handles this correctly: the Strategist uses Jupiter as its primary gate, and Policy Engine Check 8 evaluates Jupiter net spread when available. Agents HOLD more often than a naive reading of the divergence data would suggest. This is correct behavior — the pipeline only trades when execution reality supports it, not when lagged price data looks favorable.
+The Layer 1b pair rotation (introduced after initial testing) addresses this at the infrastructure level. Rather than repeatedly pre-scanning the highest-divergence pair — which held the top spot every cycle but had negative execution depth on Devnet — the agent now cycles through all non-neutral candidates. Higher-divergence pairs are still evaluated most frequently since the rotation list is sorted descending, but no single pair can monopolize every cycle.
 
 ### Guardian — No Cross-Cycle Memory
 

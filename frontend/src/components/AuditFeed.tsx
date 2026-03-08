@@ -35,6 +35,131 @@ const LEGEND = [
     { label: "SAGE", color: "bg-[#00D68F]/60" },
 ];
 
+function renderPayloadDetails(entry: AuditEntry) {
+    const d = entry.data;
+
+    if (entry.rawEvent === "AGENT_THINKING" && d.decision) {
+        const dec = d.decision as Record<string, any>;
+        return (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] p-3 space-y-2 mt-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Strategist Decision</span>
+                    <span className={cn(
+                        "px-2 py-0.5 rounded-md text-[10px] font-bold font-mono border",
+                        dec.decision === "SWAP" ? "bg-[#7C5CFC]/10 text-[#7C5CFC] border-[#7C5CFC]/25" : "bg-slate-500/10 text-slate-400 border-slate-500/25"
+                    )}>
+                        {dec.decision}
+                    </span>
+                </div>
+                {dec.decision === "SWAP" && (
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        <div><span className="text-slate-500">Pair:</span> <span className="text-slate-300 font-mono">{dec.fromToken} → {dec.toToken}</span></div>
+                        <div><span className="text-slate-500">Amount:</span> <span className="text-slate-300 font-mono">{dec.amount} {dec.fromToken}</span></div>
+                        <div><span className="text-slate-500">Confidence:</span> <span className="text-[#00D68F] font-mono">{(dec.confidence * 100).toFixed(0)}%</span></div>
+                    </div>
+                )}
+                {Array.isArray(dec.riskFlags) && dec.riskFlags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                        {dec.riskFlags.map((flag: string) => (
+                            <span key={flag} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#FFB547]/10 text-[#FFB547] border border-[#FFB547]/20">
+                                {flag}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    if (entry.rawEvent === "GUARDIAN_AUDIT" && d.audit) {
+        const aud = d.audit as Record<string, any>;
+        return (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] p-3 space-y-2 mt-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Guardian Verdict</span>
+                    <span className={cn(
+                        "px-2 py-0.5 rounded-md text-[10px] font-bold font-mono border",
+                        aud.verdict === "APPROVE" ? "bg-[#00D68F]/10 text-[#00D68F] border-[#00D68F]/25" : aud.verdict === "VETO" ? "bg-[#FF5A5A]/10 text-[#FF5A5A] border-[#FF5A5A]/25" : "bg-[#FFB547]/10 text-[#FFB547] border-[#FFB547]/25"
+                    )}>
+                        {aud.verdict}
+                    </span>
+                </div>
+                {aud.challenge && (
+                    <div className="text-[11px] text-slate-400 leading-relaxed font-mono">
+                        {aud.challenge}
+                    </div>
+                )}
+                {aud.modifiedAmount !== null && aud.modifiedAmount !== undefined && (
+                    <div className="text-[10px] text-[#FFB547] font-mono mt-1 border-t border-white/[0.05] pt-1.5">
+                        Amount restricted to → {aud.modifiedAmount} SOL
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    if ((entry.rawEvent === "POLICY_PASS" || entry.rawEvent === "POLICY_FAIL") && d.checks) {
+        const checks = d.checks as Array<{ name: string, passed: boolean, reason: string }>;
+        const passedCount = checks.filter(c => c.passed).length;
+        return (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] p-3 space-y-2 mt-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Policy Engine Checks</span>
+                    <span className="text-[10px] font-mono text-slate-500">{passedCount}/{checks.length} passed</span>
+                </div>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {checks.map(c => (
+                        <div key={c.name} className="flex items-start gap-2">
+                            <span className={cn("text-[10px] mt-0.5", c.passed ? "text-[#00D68F]" : "text-[#FF5A5A]")}>
+                                {c.passed ? "✓" : "✗"}
+                            </span>
+                            <div>
+                                <div className="text-[10px] font-mono text-slate-300">{c.name}</div>
+                                <div className="text-[9px] text-slate-500">{c.reason}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    if (entry.rawEvent === "TX_CONFIRMED") {
+        return (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] p-3 space-y-2 mt-3 text-[10px]">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+                    <span className="text-[10px] font-bold text-[#00D68F] uppercase tracking-wider">Transaction Confirmed</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div><span className="text-slate-500">Pair:</span> <span className="text-slate-300 font-mono">{d.fromToken as string} → {d.toToken as string}</span></div>
+                    <div><span className="text-slate-500">Amount In:</span> <span className="text-slate-300 font-mono">{d.amountIn as number}</span></div>
+                    <div><span className="text-slate-500">Final Output:</span> <span className="text-slate-300 font-mono">{d.amountOut as number}</span></div>
+                </div>
+                {typeof d.koraSignerAddress === "string" ? (
+                    <div className="pt-1.5 border-t border-white/[0.05] text-[9px]">
+                        <span className="text-slate-500">Kora Co-Signer:</span> <span className="font-mono text-slate-400">{d.koraSignerAddress as string}</span>
+                    </div>
+                ) : null}
+            </div>
+        );
+    }
+
+    // Default fallback dump for other events if they have complex data
+    const nonTrivialKeys = Object.keys(d).filter(k => k !== 'signature' && k !== 'message' && k !== 'error' && typeof d[k] !== 'function');
+    if (nonTrivialKeys.length > 0 && entry.rawEvent !== "AGENT_THINKING" && entry.rawEvent !== "GUARDIAN_AUDIT" && entry.rawEvent !== "POLICY_PASS" && entry.rawEvent !== "POLICY_FAIL" && entry.rawEvent !== "TX_CONFIRMED") {
+        return (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] p-3 space-y-2 mt-3">
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pb-1 border-b border-white/[0.05]">Event Data</div>
+                <pre className="text-[9px] font-mono text-slate-400 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                    {JSON.stringify(d, null, 2)}
+                </pre>
+            </div>
+        );
+    }
+
+    return null;
+}
+
 function AuditDetailModal({ entry }: { entry: AuditEntry }) {
     return (
         <>
@@ -44,7 +169,7 @@ function AuditDetailModal({ entry }: { entry: AuditEntry }) {
                     Audit Entry Detail
                 </DialogTitle>
             </DialogHeader>
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
                         <div className="text-[9px] uppercase tracking-wider text-slate-600 mb-1">Agent</div>
@@ -60,13 +185,21 @@ function AuditDetailModal({ entry }: { entry: AuditEntry }) {
                         </div>
                     </div>
                 </div>
-                <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-                    <div className="text-[9px] uppercase tracking-wider text-slate-600 mb-1.5">Severity</div>
-                    <div className="flex items-center gap-2">
-                        <span className={cn("w-2 h-2 rounded-full", SEV_DOT[entry.severity])} />
-                        <span className={cn("text-sm font-mono font-bold capitalize", SEV_COLORS[entry.severity])}>
-                            {entry.severity}
-                        </span>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+                        <div className="text-[9px] uppercase tracking-wider text-slate-600 mb-1.5">Severity</div>
+                        <div className="flex items-center gap-2">
+                            <span className={cn("w-2 h-2 rounded-full", SEV_DOT[entry.severity])} />
+                            <span className={cn("text-sm font-mono font-bold capitalize", SEV_COLORS[entry.severity])}>
+                                {entry.severity}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+                        <div className="text-[9px] uppercase tracking-wider text-slate-600 mb-1.5">Event Type</div>
+                        <div className="text-sm font-mono font-bold text-slate-300">
+                            {entry.rawEvent}
+                        </div>
                     </div>
                 </div>
                 <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
@@ -75,12 +208,15 @@ function AuditDetailModal({ entry }: { entry: AuditEntry }) {
                         {entry.message}
                     </div>
                 </div>
+
+                {renderPayloadDetails(entry)}
+
                 {entry.txLink && (
                     <a
                         href={entry.txLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs font-mono text-[#7C5CFC] hover:text-[#7C5CFC]/80 transition-colors"
+                        className="flex items-center gap-2 text-xs font-mono text-[#7C5CFC] hover:text-[#7C5CFC]/80 transition-colors mt-2"
                     >
                         <ExternalLink className="w-3.5 h-3.5" />
                         View Transaction on Explorer

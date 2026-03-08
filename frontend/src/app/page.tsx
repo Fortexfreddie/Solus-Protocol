@@ -132,6 +132,18 @@ export default function MissionControlPage() {
       setStrategistLines(newLines);
     }
 
+    if (event.type === "GUARDIAN_AUDIT") {
+      const p = event.payload;
+      const verdict = (p.verdict as string) ?? "";
+      const challenge = (p.challenge as string) ?? "";
+
+      setStrategistLines((prev) => [
+        ...prev,
+        { type: "comment" as const, text: `# [L3] ${event.agentId.toUpperCase()} Guardian Verdict: ${verdict}` },
+        ...(challenge ? [{ type: verdict === "APPROVE" ? "pass" as const : (verdict === "VETO" ? "warn" as const : "result" as const), text: `> ${challenge.slice(0, 200)}` }] : []),
+      ]);
+    }
+
     // Update policy checks from POLICY_PASS/POLICY_FAIL events
     if (event.type === "POLICY_PASS" || event.type === "POLICY_FAIL") {
       const checks = (event.payload.checks as Array<{
