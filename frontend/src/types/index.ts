@@ -220,7 +220,60 @@ export interface TxRecord {
     proofHash?: string;
 }
 
+export interface ProofVerificationEntry {
+    agentId: AgentId;
+    event: string;
+    cycle: number;
+    data: {
+        cycle: number;
+        agentId: string;
+        timestamp: number;
+        strategistDecision: {
+            decision: string;
+            fromToken: string;
+            toToken: string;
+            amount: number;
+            confidence: number;
+            reasoning: string;
+            riskFlags: string[];
+        };
+        guardianVerdict: {
+            verdict: string;
+            challenge: string;
+            modifiedAmount: number | null;
+        };
+        policyChecks: Array<{
+            name: string;
+            passed: boolean;
+            reason: string;
+            adjustedValue?: number;
+        }>;
+        priceSnapshot: {
+            timestamp: number;
+            stale: boolean;
+            prices: Record<string, { usd: number; change24h: number }>;
+            spreads: Record<string, { spreadPct: number; direction: string }>;
+            executionQuote?: {
+                fromToken: string;
+                toToken: string;
+                inAmount: number;
+                outAmount: number;
+                impliedPrice: number;
+                priceImpactPct: number;
+                netSpreadVsMarket: number;
+                worthTrading: boolean;
+                slippageBps: number;
+                fetchedAt: number;
+            };
+        };
+        hash?: string;
+        memoSignature?: string;
+        payloadSummary?: string;
+    };
+    ts: number;
+}
+
 export interface ProofVerificationResult {
-    entry: unknown;
+    entry: ProofVerificationEntry;
     verified: boolean;
 }

@@ -134,6 +134,7 @@ function AgentDetailModal({ agent }: { agent: Agent }) {
     const { profile } = agent;
     const { entries } = useLeaderboard();
     const lb = entries.find((e) => e.agentId === agent.id);
+    const { transactions, isLoading: historyLoading } = useAgentHistory(agent.id, 10);
 
     const isPnLPos = lb ? lb.netPnLUsd >= 0 : agent.netPnLUsd >= 0;
     const equity = lb ? lb.liveValueUsd : agent.equity;
@@ -243,6 +244,59 @@ function AgentDetailModal({ agent }: { agent: Agent }) {
                                 <span className="text-[11px] font-mono font-bold text-slate-300">{row.value}</span>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                {/* Transaction History */}
+                <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] overflow-hidden">
+                    <div className="px-3 py-2 border-b border-white/[0.04] bg-white/[0.02] flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <History className="w-3 h-3" /> Recent Transactions
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-600">
+                            {transactions.length} swap{transactions.length !== 1 ? "s" : ""}
+                        </span>
+                    </div>
+                    <div className="max-h-[200px] overflow-y-auto">
+                        {historyLoading ? (
+                            <div className="py-6 flex justify-center">
+                                <Loader2 className="w-4 h-4 text-slate-600 animate-spin" />
+                            </div>
+                        ) : transactions.length === 0 ? (
+                            <div className="py-6 text-center">
+                                <History className="w-4 h-4 text-slate-700 mx-auto mb-1.5" />
+                                <p className="text-[11px] font-mono text-slate-600">No confirmed swaps yet</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-white/[0.04]">
+                                {transactions.map((tx) => (
+                                    <a
+                                        key={tx.signature}
+                                        href={`https://explorer.solana.com/tx/${tx.signature}?cluster=devnet`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.02] transition-colors group"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-6 h-6 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
+                                                <RefreshCw className="w-3 h-3 text-slate-500" />
+                                            </div>
+                                            <div>
+                                                <div className="text-[11px] font-semibold text-slate-300">
+                                                    {tx.amountIn.toFixed(4)} {tx.fromToken} → {tx.amountOut.toFixed(4)} {tx.toToken}
+                                                </div>
+                                                <div className="text-[9px] font-mono text-slate-600 flex items-center gap-1.5">
+                                                    <span>Cycle #{tx.cycle}</span>
+                                                    <span className="text-slate-700">·</span>
+                                                    <span>{new Date(tx.timestamp).toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <ExternalLink className="w-3 h-3 text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -18,7 +18,7 @@ import { proofService } from '../../proof/proof-service.js';
 import { getOrchestrator } from '../../agent/agent-orchestrator.js';
 import { AGENT_PROFILES } from '../../agent/agent-profiles.js';
 import { eventBus } from '../../events/event-bus.js';
-import type { AgentId, OperationalStatus } from '../../types/agent-types.js';
+import type { AgentId, OperationalStatus, ProofPayload } from '../../types/agent-types.js';
 
 const AGENT_IDS: AgentId[] = ['rex', 'nova', 'sage'];
 
@@ -202,7 +202,10 @@ export async function getProofByHash(req: Request, res: Response): Promise<void>
     }
 
     const proofData = entry.data as Record<string, unknown>;
-    const payload = proofData['payload'] as Parameters<typeof proofService.verify>[0];
+
+    // Dev mode: payload is nested under data.payload
+    // Production: data IS the payload directly (from DB ProofRecord.payload)
+    const payload = (proofData['payload'] ?? (proofData['strategistDecision'] ? proofData : undefined)) as unknown as ProofPayload;
     const verified = payload ? proofService.verify(payload, hash) : false;
 
     res.json({ entry, verified });

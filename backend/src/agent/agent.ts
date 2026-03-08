@@ -52,7 +52,7 @@ import type {
 //  Constants 
 
 const MASTER_KEY = process.env.VAULT_MASTER_KEY ?? '';
-const RPC_URL    = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
+const RPC_URL = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 
 //  Agent class 
 
@@ -65,7 +65,7 @@ export class Agent {
     private constructor(profile: PersonalityProfile, vault: Vault) {
         this.agentId = profile.agentId;
         this.profile = profile;
-        this.vault   = vault;
+        this.vault = vault;
     }
 
     /**
@@ -77,11 +77,11 @@ export class Agent {
         return new Agent(profile, vault);
     }
 
-    getAgentId(): AgentId         { return this.agentId; }
+    getAgentId(): AgentId { return this.agentId; }
     getProfile(): PersonalityProfile { return this.profile; }
-    getCycleCount(): number        { return this.cycleCount; }
-    getPublicKey(): string         { return this.vault.getPublicKey().toBase58(); }
-    async getBalance()             { return this.vault.getBalance(); }
+    getCycleCount(): number { return this.cycleCount; }
+    getPublicKey(): string { return this.vault.getPublicKey().toBase58(); }
+    async getBalance() { return this.vault.getBalance(); }
 
     //  Main cycle
 
@@ -94,7 +94,7 @@ export class Agent {
      */
     async runCycle(): Promise<void> {
         this.cycleCount++;
-        const cycle  = this.cycleCount;
+        const cycle = this.cycleCount;
         const logger = getAuditLogger();
 
         eventBus.emit('AGENT_STATUS', this.agentId, {
@@ -125,34 +125,34 @@ export class Agent {
                     prescanPair.to,
                     0.1, // representative amount — not the final tx size
                     priceData.prices[prescanPair.from as TokenSymbol]?.usd ?? 0,
-                    priceData.prices[prescanPair.to   as TokenSymbol]?.usd ?? 0,
+                    priceData.prices[prescanPair.to as TokenSymbol]?.usd ?? 0,
                 );
                 priceData.executionQuote = prescanQuote;
             }
 
             // Emit Layer 1 event — includes pre-scan quote if available.
             eventBus.emit('PRICE_FETCHED', this.agentId, {
-                prices:  priceData.prices,
+                prices: priceData.prices,
                 spreads: priceData.spreads,
-                stale:   priceData.stale,
+                stale: priceData.stale,
                 executionQuote: priceData.executionQuote
                     ? priceData.executionQuote.error
                         ? { error: priceData.executionQuote.error }
                         : {
-                            pair:              `${priceData.executionQuote.fromToken}→${priceData.executionQuote.toToken}`,
-                            impliedPrice:      priceData.executionQuote.impliedPrice,
+                            pair: `${priceData.executionQuote.fromToken}→${priceData.executionQuote.toToken}`,
+                            impliedPrice: priceData.executionQuote.impliedPrice,
                             netSpreadVsMarket: priceData.executionQuote.netSpreadVsMarket,
-                            worthTrading:      priceData.executionQuote.worthTrading,
-                            priceImpactPct:    priceData.executionQuote.priceImpactPct,
-                          }
+                            worthTrading: priceData.executionQuote.worthTrading,
+                            priceImpactPct: priceData.executionQuote.priceImpactPct,
+                        }
                     : undefined,
             });
 
             //  Layer 2: Strategist (DeepSeek) 
             // Strategist now receives priceData with executionQuote populated.
             // It can apply the 4-step Decision Rule from SKILLS.md correctly.
-            const balance    = await this.vault.getBalance();
-            const txHistory  = logger.getLastNTransactions(5, this.agentId);
+            const balance = await this.vault.getBalance();
+            const txHistory = logger.getLastNTransactions(5, this.agentId);
 
             const strategistResult = await strategistService.reason(
                 this.agentId, this.profile, priceData, balance, txHistory, cycle,
@@ -160,7 +160,7 @@ export class Agent {
 
             if (!strategistResult.ok) {
                 eventBus.emit('LLM_PARSE_ERROR', this.agentId, {
-                    error:     strategistResult.error,
+                    error: strategistResult.error,
                     rawOutput: strategistResult.rawOutput,
                 });
                 logger.log({
@@ -174,13 +174,13 @@ export class Agent {
             let decision: StrategistDecision = { ...strategistResult.decision };
 
             eventBus.emit('AGENT_THINKING', this.agentId, {
-                decision:   decision.decision,
-                fromToken:  decision.fromToken,
-                toToken:    decision.toToken,
-                amount:     decision.amount,
-                reasoning:  decision.reasoning,
+                decision: decision.decision,
+                fromToken: decision.fromToken,
+                toToken: decision.toToken,
+                amount: decision.amount,
+                reasoning: decision.reasoning,
                 confidence: decision.confidence,
-                riskFlags:  decision.riskFlags,
+                riskFlags: decision.riskFlags,
             });
 
             logger.log({
@@ -197,7 +197,7 @@ export class Agent {
                     priceData.executionQuote &&
                     !priceData.executionQuote.error &&
                     priceData.executionQuote.fromToken === decision.fromToken &&
-                    priceData.executionQuote.toToken   === decision.toToken;
+                    priceData.executionQuote.toToken === decision.toToken;
 
                 if (!alreadyCorrectPair) {
                     const finalQuote = await getPriceOracle().getExecutionQuote(
@@ -205,25 +205,25 @@ export class Agent {
                         decision.toToken,
                         decision.amount,
                         priceData.prices[decision.fromToken as TokenSymbol]?.usd ?? 0,
-                        priceData.prices[decision.toToken   as TokenSymbol]?.usd ?? 0,
+                        priceData.prices[decision.toToken as TokenSymbol]?.usd ?? 0,
                     );
                     priceData.executionQuote = finalQuote;
 
                     // Re-emit PRICE_FETCHED with the corrected quote so the
                     // dashboard Layer 1 display shows the actual trade quote.
                     eventBus.emit('PRICE_FETCHED', this.agentId, {
-                        prices:  priceData.prices,
+                        prices: priceData.prices,
                         spreads: priceData.spreads,
-                        stale:   priceData.stale,
+                        stale: priceData.stale,
                         executionQuote: finalQuote.error
                             ? { error: finalQuote.error }
                             : {
-                                pair:              `${finalQuote.fromToken}→${finalQuote.toToken}`,
-                                impliedPrice:      finalQuote.impliedPrice,
+                                pair: `${finalQuote.fromToken}→${finalQuote.toToken}`,
+                                impliedPrice: finalQuote.impliedPrice,
                                 netSpreadVsMarket: finalQuote.netSpreadVsMarket,
-                                worthTrading:      finalQuote.worthTrading,
-                                priceImpactPct:    finalQuote.priceImpactPct,
-                              },
+                                worthTrading: finalQuote.worthTrading,
+                                priceImpactPct: finalQuote.priceImpactPct,
+                            },
                     });
                 }
             }
@@ -237,7 +237,7 @@ export class Agent {
             if (!guardianResult.ok) {
                 // Safety veto — Gemini was unreachable or returned invalid output.
                 eventBus.emit('GUARDIAN_AUDIT', this.agentId, {
-                    verdict:   'VETO',
+                    verdict: 'VETO',
                     challenge: guardianResult.error,
                 });
                 logger.log({
@@ -250,8 +250,8 @@ export class Agent {
             const { audit } = guardianResult;
 
             eventBus.emit('GUARDIAN_AUDIT', this.agentId, {
-                verdict:        audit.verdict,
-                challenge:      audit.challenge,
+                verdict: audit.verdict,
+                challenge: audit.challenge,
                 modifiedAmount: audit.modifiedAmount ?? undefined,
             });
 
@@ -270,7 +270,7 @@ export class Agent {
 
             //  Layer 4: Policy Engine (9 deterministic checks) 
             const dailyVolume = logger.getDailyVolumeSOL(this.agentId);
-            const bestSpread  = Math.max(
+            const bestSpread = Math.max(
                 ...Object.values(priceData.spreads).map((s) => s.spreadPct),
             );
 
@@ -280,11 +280,11 @@ export class Agent {
 
             const policyEvent = policyResult.approved ? 'POLICY_PASS' : 'POLICY_FAIL';
             eventBus.emit(policyEvent, this.agentId, {
-                checks:      policyResult.checks,
-                approved:    policyResult.approved,
-                outcome:     policyResult.outcome,
-                failedOn:    policyResult.failedOn,
-                reason:      policyResult.reason,
+                checks: policyResult.checks,
+                approved: policyResult.approved,
+                outcome: policyResult.outcome,
+                failedOn: policyResult.failedOn,
+                reason: policyResult.reason,
                 finalDecision: policyResult.finalDecision,
             });
 
@@ -318,25 +318,26 @@ export class Agent {
             );
 
             eventBus.emit('PROOF_ANCHORED', this.agentId, {
-                hash:           proofRecord.hash,
-                memoSignature:  proofRecord.memoSignature,
+                hash: proofRecord.hash,
+                memoSignature: proofRecord.memoSignature,
                 payloadSummary: proofRecord.payloadSummary,
             });
 
             logger.log({
                 agentId: this.agentId, cycle, event: 'PROOF_ANCHORED',
                 data: {
-                    hash:           proofRecord.hash,
-                    memoSignature:  proofRecord.memoSignature,
+                    hash: proofRecord.hash,
+                    memoSignature: proofRecord.memoSignature,
                     payloadSummary: proofRecord.payloadSummary,
+                    payload: proofRecord.payload,
                 },
             });
 
             //  Layer 6: Vault signing
             eventBus.emit('TX_SIGNING', this.agentId, {
                 fromToken: finalDecision.fromToken,
-                toToken:   finalDecision.toToken,
-                amount:    finalDecision.amount,
+                toToken: finalDecision.toToken,
+                amount: finalDecision.amount,
             });
 
             //  Layer 7: Kora co-sign + Broadcast
@@ -358,25 +359,25 @@ export class Agent {
                 eventBus.emit('TX_CONFIRMED', this.agentId, {
                     signature,
                     fromToken: confirmation.fromToken,
-                    toToken:   confirmation.toToken,
-                    amount:    confirmation.amount,
-                    output:    confirmation.output,
+                    toToken: confirmation.toToken,
+                    amount: confirmation.amount,
+                    output: confirmation.output,
                 });
 
                 // Update balances post-swap.
                 const updatedBalance = await this.vault.getBalance();
                 eventBus.emit('BALANCE_UPDATE', this.agentId, {
-                    sol:    updatedBalance.sol,
+                    sol: updatedBalance.sol,
                     tokens: updatedBalance.tokens,
                 });
 
                 // Write the confirmed TxRecord to the vault history and audit log.
                 const txRecord: TxRecord = {
                     signature,
-                    agentId:   this.agentId,
+                    agentId: this.agentId,
                     fromToken: confirmation.fromToken,
-                    toToken:   confirmation.toToken,
-                    amountIn:  confirmation.amount,
+                    toToken: confirmation.toToken,
+                    amountIn: confirmation.amount,
                     amountOut: confirmation.output,
                     timestamp: confirmation.confirmedAt,
                     cycle,
@@ -390,7 +391,7 @@ export class Agent {
                     data: {
                         ...txRecord,
                         koraSignerAddress,
-                        proofHash:     proofRecord.hash,
+                        proofHash: proofRecord.hash,
                         memoSignature: proofRecord.memoSignature,
                     },
                 });
@@ -398,8 +399,8 @@ export class Agent {
             } catch (txErr) {
                 eventBus.emit('TX_FAILED', this.agentId, {
                     signature: '',
-                    error:     (txErr as Error).message,
-                    retrying:  false,
+                    error: (txErr as Error).message,
+                    retrying: false,
                 });
                 logger.log({
                     agentId: this.agentId, cycle, event: 'TX_FAILED',

@@ -147,19 +147,15 @@ export interface LeaderboardResponse {
 
 export interface ProofResponse {
     proofs: Array<{
-        hash: string;
-        memoSignature: string;
-        payloadSummary: string;
-        payload: {
-            agentId: string;
-            cycle: number;
-            timestamp: number;
-            strategistDecision: Record<string, unknown>;
-            guardianVerdict: Record<string, unknown>;
-            policyChecks: Array<Record<string, unknown>>;
-            priceSnapshot: Record<string, unknown>;
+        agentId: string;
+        event: string;
+        cycle: number;
+        data: {
+            hash: string;
+            memoSignature?: string;
+            payloadSummary: string;
         };
-        anchoredAt: number;
+        ts: number;
     }>;
     count: number;
 }
