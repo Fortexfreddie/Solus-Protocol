@@ -20,6 +20,7 @@ import type { AgentId, WsEventType, WsEventEnvelope } from '../types/agent-types
 
 export class EventBus {
     private io: SocketIOServer | null = null;
+    private listeners: ((event: WsEventEnvelope) => void)[] = [];
 
     /**
      * Binds the Socket.io server instance to this bus.
@@ -30,7 +31,15 @@ export class EventBus {
     }
 
     /**
-     * Emits a typed event to all connected dashboard clients.
+     * Subscribe to all events emitted via this bus.
+     * Used by internal services like the Telegram bot.
+     */
+    onAny(callback: (event: WsEventEnvelope) => void): void {
+        this.listeners.push(callback);
+    }
+
+    /**
+     * Emits a typed event to all connected dashboard clients and local listeners.
      *
      * Every event carries the agent identity and a Unix timestamp so the
      * frontend can sequence events correctly across the three concurrent agents.
@@ -38,8 +47,6 @@ export class EventBus {
      * silently skipped — agent logic must never depend on event delivery.
      */
     emit<T>(type: WsEventType, agentId: AgentId, payload: T): void {
-        if (!this.io) return;
-
         const envelope: WsEventEnvelope<T> = {
             type,
             agentId,
@@ -47,7 +54,13 @@ export class EventBus {
             payload,
         };
 
-        this.io.emit('event', envelope);
+        // Emit to WebSocket clients
+        if (this.io) {
+            this.io.emit('event', envelope);
+        }
+
+        // Trigger local listeners
+        this.listeners.forEach((cb) => cb(envelope as WsEventEnvelope<any>));
     }
 
     /**

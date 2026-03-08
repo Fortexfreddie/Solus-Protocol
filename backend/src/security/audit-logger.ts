@@ -66,8 +66,12 @@ export class AuditLogger {
      * (in production) PostgreSQL. Never throws — all failures are logged to
      * stderr or the file logger but do not interrupt the agent cycle.
      */
-    log(entry: Omit<AuditEntry, 'ts'>): void {
-        const full: AuditEntry = { ts: Date.now(), ...entry };
+    log(entry: Omit<AuditEntry, 'ts' | 'id'>): void {
+        const full: AuditEntry = {
+            id: Math.random().toString(36).substring(2, 15),
+            ts: Date.now(),
+            ...entry
+        };
 
         // Maintain in-memory circular buffer
         this.buffer.push(full);
@@ -168,6 +172,7 @@ export class AuditLogger {
             ]);
 
             const entries: AuditEntry[] = rows.map((r) => ({
+                id: r.id,
                 agentId: r.agentId as AgentId,
                 event: r.event,
                 cycle: r.cycle,
@@ -199,6 +204,7 @@ export class AuditLogger {
             });
 
             return rows.map((r) => ({
+                id: r.id,
                 agentId: r.agentId as AgentId,
                 event: r.event,
                 cycle: r.cycle,
@@ -222,6 +228,7 @@ export class AuditLogger {
             if (!proofRow) return undefined;
 
             return {
+                id: proofRow.id,
                 agentId: proofRow.agentId as AgentId,
                 event: 'PROOF_ANCHORED',
                 cycle: proofRow.cycle,

@@ -2,23 +2,29 @@
  * guardian-service.ts
  * Layer 3: Guardian AI Service — Google Gemini adversarial auditor.
  *
- * The Guardian is a completely separate LLM from the Strategist (DeepSeek).
- * Using different providers is intentional: two different reasoning engines, two
- * different failure modes, two different biases. If both agree, the decision is
- * genuinely robust.
+ * Uses Google Gemini (gemini-2.5-flash) via the OpenAI-compatible endpoint.
+ * Fails closed: any API error, empty response, or parse failure results in a
+ * safety VETO — the cycle ends without any transaction being submitted.
  *
- * Both providers are accessed through the unified OpenAI SDK — DeepSeek and
- * Gemini each expose OpenAI-compatible chat completion endpoints. The adversarial
- * isolation happens at the corporate/model level (DeepSeek vs Google), not at the
- * package level. This is the "Single SDK, Dual Provider" architecture.
+ * Gemini-specific considerations
+ * ───────────────────────────────
+ * gemini-2.5-flash is a thinking model. It silently burns tokens on internal
+ * reasoning before producing its visible output. This has two consequences:
  *
- * The Guardian's sole purpose is adversarial challenge. It receives the Strategist's
- * full decision and must find flaws before approving it. It fails closed — if Gemini
- * is unreachable or returns invalid output, the decision receives a safety VETO and
- * the cycle ends without any transaction being submitted.
+ *   1. MAX_TOKENS must be high enough to cover BOTH the thinking budget AND
+ *      the JSON output. 1024 was too low — the model was hitting the limit
+ *      mid-generation and returning truncated or empty content. 4096 is safe.
+ *
+ *   2. The visible output sometimes includes a <think>…</think> preamble,
+ *      markdown code fences, or trailing prose AFTER the JSON object.
+ *      decision-parser.ts handles all of these via extractJsonObject().
+ *
+ * response_format is intentionally omitted: Gemini's OpenAI-compatible endpoint
+ * truncates JSON mid-stream when response_format: json_object is set without a
+ * strict schema. JSON extraction in the parser is the correct mitigation.
  *
  * WebSocket event emitted: GUARDIAN_AUDIT
- * Model: Google Gemini gemini-2.5-flash (via OpenAI-compatible endpoint)
+ * Model: gemini-2.5-flash (configurable via GEMINI_MODEL env var)
  */
 
 import type {
@@ -27,28 +33,34 @@ import type {
     PriceData,
     AgentBalance,
     PersonalityProfile,
-    // AgentId,
 } from '../types/agent-types';
 import { getGeminiClient } from './ai-client';
 import { promptBuilder } from './prompt-builder';
-import {
-    parseGuardianAudit,
-    type ParseResult,
-} from './decision-parser';
+import { parseGuardianAudit, type ParseResult } from './decision-parser';
 
-// Constants 
-// gemini-2.5-flash: fast inference appropriate for per-cycle adversarial audits.
-// Upgrade to gemini-2.5-pro for higher reasoning quality in production deployments.
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
-const MAX_TOKENS = 2048;
-// Low temperature enforces structured JSON rather than exploratory prose.
-const TEMPERATURE = 0.2;
 
-// Result types 
+/**
+ * 4096 tokens to cover Gemini's hidden thinking budget + JSON output.
+ * gemini-2.5-flash thinking models consume tokens internally before emitting
+ * visible content — 1024 was insufficient and caused truncated/empty responses.
+ */
+const MAX_TOKENS = 4096;
+
+/**
+ * Low temperature enforces structured, consistent JSON rather than exploratory prose.
+ * The Guardian's job is deterministic auditing, not creative reasoning.
+ */
+const TEMPERATURE = 0.1;
+
+// ─── Result types ──────────────────────────────────────────────────────────────
+
 export interface GuardianSuccess {
     ok: true;
     audit: GuardianAudit;
-    /** Raw Gemini output stored in audit log for full decision traceability */
+    /** Raw Gemini output stored verbatim in the audit log for full traceability. */
     rawOutput: string;
 }
 
@@ -57,8 +69,8 @@ export interface GuardianFailure {
     error: string;
     rawOutput: string;
     /**
-     * Always true on GuardianFailure — signals that this is a safety-triggered VETO
-     * rather than an explicit model verdict. The caller must end the cycle without
+     * Always true on GuardianFailure — signals a safety-triggered VETO rather
+     * than an explicit model verdict. The caller MUST end the cycle without
      * submitting any transaction.
      */
     safetyVeto: true;
@@ -66,25 +78,22 @@ export interface GuardianFailure {
 
 export type GuardianResult = GuardianSuccess | GuardianFailure;
 
-// GuardianService class
+// ─── GuardianService ───────────────────────────────────────────────────────────
 
 export class GuardianService {
     /**
-     * Adversarially audits the Strategist's decision using Google Gemini via
-     * the OpenAI-compatible chat completions endpoint.
+     * Adversarially audits the Strategist's decision using Google Gemini.
      *
-     * Fail-closed security posture: any error at this layer — API failure,
-     * timeout, parse error, or structurally invalid MODIFY — results in a
-     * safety VETO. An unknown or uncertain Guardian verdict must never allow
-     * a transaction to proceed.
+     * Fail-closed: any error at this layer — API failure, timeout, parse error,
+     * or structurally invalid MODIFY — results in a safety VETO. An uncertain
+     * or unknown Guardian verdict must never allow a transaction to proceed.
      *
-     * The error detail is returned to the caller for audit logging rather than
-     * being swallowed here. This preserves full traceability of every veto reason.
+     * Error detail is returned to the caller for audit logging rather than being
+     * swallowed here. This preserves full traceability of every veto reason.
      *
      * @returns GuardianResult — typed discriminated union, never throws
      */
     async audit(
-        // agentId: AgentId,
         profile: PersonalityProfile,
         decision: StrategistDecision,
         priceData: PriceData,
@@ -92,21 +101,11 @@ export class GuardianService {
         cycle: number,
     ): Promise<GuardianResult> {
         const systemPrompt = promptBuilder.buildGuardianSystemPrompt(profile);
-        const userPrompt = promptBuilder.buildGuardianUserPrompt(
-            decision,
-            priceData,
-            balance,
-            cycle,
-        );
+        const userPrompt = promptBuilder.buildGuardianUserPrompt(decision, priceData, balance, cycle);
 
         let rawOutput = '';
 
         try {
-            // NOTE: response_format is intentionally OMITTED for Gemini.
-            // Gemini's OpenAI-compatible endpoint truncates JSON mid-generation
-            // when response_format: { type: 'json_object' } is set without a
-            // strict schema. Instead, we rely on stripCodeFences + Zod validation
-            // in decision-parser.ts to extract and validate the JSON output.
             const completion = await getGeminiClient().chat.completions.create({
                 model: GEMINI_MODEL,
                 max_tokens: MAX_TOKENS,
@@ -115,39 +114,47 @@ export class GuardianService {
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userPrompt },
                 ],
+                // response_format intentionally omitted — see module-level comment.
             });
 
             rawOutput = completion.choices[0]?.message?.content ?? '';
 
-            if (!rawOutput) {
-                return this.safetyVeto('Gemini returned an empty response.', rawOutput);
+            if (!rawOutput.trim()) {
+                return this._safetyVeto(
+                    `Gemini returned an empty response. ` +
+                    `Finish reason: ${completion.choices[0]?.finish_reason ?? 'unknown'}. ` +
+                    `This may indicate the thinking budget consumed all available tokens — ` +
+                    `MAX_TOKENS may need to be increased further.`,
+                    rawOutput,
+                );
             }
 
             const parseResult: ParseResult<GuardianAudit> = parseGuardianAudit(rawOutput);
 
             if (!parseResult.ok) {
-                return this.safetyVeto(parseResult.error, rawOutput);
+                return this._safetyVeto(parseResult.error, rawOutput);
             }
 
             const audit = parseResult.data;
 
-            // A MODIFY verdict without a concrete modifiedAmount is structurally
-            // incomplete — Gemini has issued a half-verdict. Treat as VETO.
-            if (audit.verdict === 'MODIFY' && audit.modifiedAmount === null) {
-                return this.safetyVeto(
-                    'Gemini issued MODIFY verdict but modifiedAmount is null. Treating as VETO.',
+            // A MODIFY verdict without a concrete modifiedAmount is a half-verdict.
+            // Gemini has identified a problem but failed to quantify the correction.
+            if (audit.verdict === 'MODIFY' && (audit.modifiedAmount == null)) {
+                return this._safetyVeto(
+                    'Gemini issued MODIFY verdict but modifiedAmount is null or missing. ' +
+                    'A MODIFY verdict requires a concrete positive amount. Treating as VETO.',
                     rawOutput,
                 );
             }
 
-            // The Guardian may only reduce a position size, never increase it.
-            // A modifiedAmount >= original is a model hallucination or logic error.
+            // The Guardian may only reduce position size — never increase it.
+            // modifiedAmount >= original signals a model hallucination or logic error.
             if (
                 audit.verdict === 'MODIFY' &&
-                audit.modifiedAmount !== null &&
+                audit.modifiedAmount != null &&
                 audit.modifiedAmount >= decision.amount
             ) {
-                return this.safetyVeto(
+                return this._safetyVeto(
                     `Gemini MODIFY amount (${audit.modifiedAmount}) >= original (${decision.amount}). ` +
                     `The Guardian may only reduce position size, not increase it. Treating as VETO.`,
                     rawOutput,
@@ -157,8 +164,11 @@ export class GuardianService {
             return { ok: true, audit, rawOutput };
 
         } catch (err) {
-            return this.safetyVeto(
-                `Gemini API error: ${(err as Error).message}`,
+            // Surface HTTP status codes for API diagnostics (503 = overloaded, 429 = rate limit).
+            const status = (err as { status?: number }).status;
+            const statusInfo = status ? ` [HTTP ${status}]` : '';
+            return this._safetyVeto(
+                `Gemini API error${statusInfo}: ${(err as Error).message}`,
                 rawOutput,
             );
         }
@@ -166,12 +176,13 @@ export class GuardianService {
 
     /**
      * Constructs a GuardianFailure with safetyVeto: true.
-     * Error detail is preserved for the caller to write to the audit log.
+     * Named with underscore to signal it is an internal factory, not a public API.
      */
-    private safetyVeto(error: string, rawOutput: string): GuardianFailure {
+    private _safetyVeto(error: string, rawOutput: string): GuardianFailure {
         return { ok: false, error, rawOutput, safetyVeto: true };
     }
 }
 
-// Singleton 
+// ─── Singleton ─────────────────────────────────────────────────────────────────
+
 export const guardianService = new GuardianService();

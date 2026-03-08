@@ -239,6 +239,7 @@ export interface IVault {
 // Audit Log Entry 
 
 export interface AuditEntry {
+    id?: string;
     ts: number;
     agentId: AgentId;
     cycle: number;

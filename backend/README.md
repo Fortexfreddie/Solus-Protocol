@@ -26,6 +26,7 @@
 - [Environment Variables](#environment-variables)
 - [Running Locally](#running-locally)
 - [Solus CLI](#solus-cli-command-line-interface)
+- [Telegram Integration](#telegram-integration)
 - [Docker Deployment](#docker-deployment)
 - [Smoke Tests](#smoke-tests)
 - [Deploying to Render](#deploying-to-render)
@@ -590,6 +591,35 @@ Instead, use the included wrapper scripts in the project root to execute the CLI
 -   `./solus pause nova`
 
 > **Note:** All commands target `localhost:3001` by default. You can override this using the `-p <port>` flag (e.g., `.\solus status -p 8080`).
+
+---
+
+---
+
+## Telegram Integration
+
+Solus Protocol supports out-of-band monitoring and remote control via a Telegram bot. The bot provides "High-Value" filtering to ensure alerts are actionable and low-noise.
+
+### Features
+- **Push Notifications**: Real-time alerts for swap confirmations, failed trades, Guardian vetoes, and stop-loss triggers.
+- **Silent Guardian**: Only notifies on critical safety interventions (VETO/MODIFY), keeping approvals silent.
+- **Remote Control**: Administrative commands to pause/resume agents or force manual cycles.
+
+### Configuration
+Add the following to your `.env`:
+```env
+TELEGRAM_BOT_TOKEN=your_token_from_botfather
+TELEGRAM_CHAT_ID=your_chat_id
+TELEGRAM_ADMIN_ID=your_telegram_user_id  # Required for commands
+```
+
+### Commands
+- `/status` — Fleet PnL and cycle counts.
+- `/balances` — Live SOL balances.
+- `/agents` — Operational health (ACTIVE/PAUSED).
+- `/pause <id>` — Emergency Kill Switch (e.g., `/pause rex`).
+- `/resume <id>` — Resume a paused agent.
+- `/fire <id>` — Trigger an immediate out-of-schedule cycle.
 
 ---
 

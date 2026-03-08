@@ -25,6 +25,8 @@ import { getPriceOracle } from './price/price-oracle';
 import { getAuditLogger } from './security/audit-logger';
 import { initOrchestrator } from './agent/agent-orchestrator';
 import { startServer, PORT } from './app';
+import { createTelegramNotifier } from './notifications/telegram-bot';
+
 
 //  Required environment variables
 
@@ -129,6 +131,14 @@ async function main(): Promise<void> {
   }
   console.log('');
 
+  //  Step 7b: Telegram Notifier
+  console.log('[7b/10] Initialising Telegram Notifier...');
+  const telegram = createTelegramNotifier(orchestrator);
+  if (telegram) {
+    telegram.init();
+  }
+
+
   //  Step 8: Start HTTP + WebSocket server
   console.log('[8/10] Starting Express + Socket.io server...');
   await startServer();
@@ -169,6 +179,8 @@ async function main(): Promise<void> {
     console.log(`\n[Shutdown] Received ${signal}. Stopping agents...`);
     orchestrator.stop();
     oracle.stop();
+    await telegram?.stop();
+
     logger.log({
       agentId: 'rex', cycle: 0, event: 'SYSTEM_SHUTDOWN',
       data: { signal },
