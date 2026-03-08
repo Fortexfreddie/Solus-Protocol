@@ -33,7 +33,7 @@ async function fetchAuditLog(): Promise<AuditEntry[]> {
 
     return entries.map(
         (entry): AuditEntry => ({
-            id: `${entry.agentId}-${entry.ts}-${entry.cycle}`,
+            id: entry.id || `${entry.agentId}-${entry.ts}-${entry.event.slice(0, 5)}`,
             timestamp: new Date(entry.ts).toLocaleTimeString("en-US", {
                 hour12: false,
                 hour: "2-digit",

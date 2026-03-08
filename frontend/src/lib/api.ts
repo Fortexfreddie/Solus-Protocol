@@ -162,6 +162,7 @@ export interface ProofResponse {
 
 export interface LogsResponse {
     entries: Array<{
+        id?: string;
         ts: number;
         agentId: string;
         cycle: number;

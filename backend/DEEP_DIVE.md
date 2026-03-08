@@ -23,6 +23,7 @@
 15. [Known Limitations and Future Work](#known-limitations-and-future-work)
 16. [Agent Command Center](#agent-command-center)
 17. [PnL Leaderboard](#pnl-leaderboard)
+18. [Telegram Bot](#telegram-bot)
 
 ---
 
@@ -820,6 +821,32 @@ netPnLUsd    = liveValueUsd - baselineUsd
 - **SPL token inclusion:** All four token balances are summed. If the leaderboard tracked only SOL, a swap from SOL to USDC would register as a loss even though total portfolio value is unchanged.
 
 **API:** `GET /api/leaderboard` — returns agents sorted by `netPnLUsd` descending, with per-agent balance breakdowns and swap counts.
+
+---
+
+## 18. Telegram Bot Integration
+
+### Out-of-Band Monitoring
+
+The Telegram integration (`TelegramNotifier`) is designed to give the protocol an out-of-band monitoring and remote control channel that is separate from the frontend web dashboard. 
+
+### "Silent Guardian" Logic
+
+A major UX enhancement is the **Silent Guardian** logic applied to push notifications. An agent processing a cycle successfully and getting an `APPROVE` verdict from the Guardian is routine behavior. 
+
+The bot intentionally **does not** send a push notification for a routine approval. It only alerts the Telegram channel when the Guardian intervenes with a `VETO` or `MODIFY` action. This ensures the channel remains a high-signal environment for security alerts, rather than being spammed with routine checks.
+
+### Dynamic Fleet Controls
+
+The bot replaces primitive text commands with dynamic, state-aware inline keyboards. 
+- The `/control` panel lists all three agents. 
+- The `TelegramNotifier` queries the `AgentOrchestrator` to determine each agent's active `operationalStatus`. 
+- An `ACTIVE` agent only shows a **Pause** button, preventing redundant activation.
+- A `PAUSED` agent only shows a **Resume** button.
+
+### Real-Time Balance Queries
+
+The `/balances` command demonstrates direct integration with the Agent Vaults. Instead of relying on cached payload state or periodic polling, the Telegram command actively invokes `agent.getBalance()` across all three agents simultaneously, directly querying the Solana RPC for their real-time on-chain SOL balances.
 
 ---
 

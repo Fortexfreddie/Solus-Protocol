@@ -17,7 +17,7 @@ This repository is a monorepo containing both the **Backend Engine** and the **M
 - [**backend (The 7-Layer Air-Gap Engine)**](./backend/README.md)
   The core trading engine, containing the LLM orchestration (DeepSeek & Gemini), Policy Engine, on-chain Proof-of-Reasoning, AES-256-GCM Vaults, and Kora Paymaster integration.
   
-- [**frontend (Mission Control Dashboard)**](./frontend/README.md)
+- [**frontend (Mission Control Dashboard)**](./frontend/README.md) | **[Telegram Bot (Out-of-band Monitoring)](./backend/README.md#telegram-integration)** | **[Watch the 3-Minute Demo Video Here](link)**
   The Next.js real-time observer dashboard. Connects via WebSocket to surface agent thinking, audits, policy checks, and live PnL in real time.
 
 - **[Kora (Paymaster Service)](./backend/README.md#kora-paymaster-setup--integration)**
