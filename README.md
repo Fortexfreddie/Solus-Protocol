@@ -58,6 +58,7 @@ pnpm solus pause nova        # Kill Switch: stop an agent
 pnpm solus resume nova       # Resume a paused agent
 pnpm solus fire sage         # Force an immediate cycle
 ```
+*(If running via Docker, use `docker compose exec backend pnpm solus <command>` from the project root instead. No local `pnpm install` required.)*
 
 ---
 

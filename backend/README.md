@@ -571,6 +571,7 @@ Executes a complete end-to-end agent cycle simulation.
 
 The backend includes a fully-featured CLI for real-time portfolio monitoring and agent control directly from your terminal.
 
+### Running Locally (No Docker)
 Ensure the backend server is running (`pnpm dev`), then open a new terminal in the `backend` directory:
 
 -   `pnpm solus status` — View the live fleet PnL leaderboard, aggregate swap counts, and active operational status.
@@ -578,6 +579,15 @@ Ensure the backend server is running (`pnpm dev`), then open a new terminal in t
 -   `pnpm solus pause <agentId>` — **Kill Switch:** Stop an agent from commencing future cycles.
 -   `pnpm solus resume <agentId>` — Resume a paused agent.
 -   `pnpm solus fire <agentId>` — **Force Run:** Trigger an immediate out-of-schedule cycle for an agent (bypasses the 60s timer, subject to a 15s rate limit).
+
+### Running via Docker
+If the Solus Protocol stack is running via Docker Compose, you **do not** need to `cd` into the backend or install dependencies locally. 
+
+Instead, execute the CLI directly inside the running `backend` container from the project root:
+
+-   `docker compose exec backend pnpm solus status`
+-   `docker compose exec backend pnpm solus tail rex`
+-   `docker compose exec backend pnpm solus pause nova`
 
 > **Note:** All commands target `localhost:3001` by default. You can override this using the `-p <port>` flag (e.g., `pnpm solus status -p 8080`).
 
