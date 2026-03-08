@@ -23,7 +23,7 @@ import { PrismaClient } from '@prisma/client';
 
 //  Environment 
 
-export const isProduction = process.env.NODE_ENV === 'production';
+export const isProduction = process.env.NODE_ENV?.trim() === 'production';
 
 //  Lazy singleton 
 

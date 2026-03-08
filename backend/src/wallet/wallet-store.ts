@@ -137,9 +137,9 @@ class DbWalletStore implements WalletStore {
 
     async saveStartingBalance(agentId: string, solBalance: number): Promise<void> {
         const prisma = getPrisma();
-        // Only write if not already set (> 0 means already recorded).
+        // Only write if not already set (> -1 means already recorded).
         const existing = await prisma.agentWallet.findUnique({ where: { id: agentId } });
-        if (!existing || existing.startingBalanceSol > 0) return;
+        if (!existing || existing.startingBalanceSol > -1) return;
         await prisma.agentWallet.update({
             where: { id: agentId },
             data: { startingBalanceSol: solBalance },
@@ -149,7 +149,7 @@ class DbWalletStore implements WalletStore {
     async getStartingBalance(agentId: string): Promise<number | null> {
         const prisma = getPrisma();
         const record = await prisma.agentWallet.findUnique({ where: { id: agentId } });
-        if (!record || record.startingBalanceSol === 0) return null;
+        if (!record || record.startingBalanceSol === -1) return null;
         return record.startingBalanceSol;
     }
 }

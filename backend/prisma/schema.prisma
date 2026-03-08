@@ -16,7 +16,7 @@ model AgentWallet {
   id                 String   @id  // agentId: "rex", "nova", "sage"
   encryptedKey       String       // Full EncryptedVaultFile JSON (contains iv, authTag, ciphertext, salt, etc.)
   publicKey          String       // Plaintext base58 public key for display / quick lookups
-  startingBalanceSol Float    @default(0)  // SOL balance at wallet creation — PnL baseline
+  startingBalanceSol Float    @default(-1)  // SOL balance at wallet creation — PnL baseline
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

@@ -59,18 +59,12 @@ export type ParseResult<T> = ParseSuccess<T> | ParseFailure;
  * around JSON output despite being instructed not to. Handles ```json, ```,
  * and any leading/trailing whitespace.
  */
-// function stripCodeFences(raw: string): string {
-//     return raw
-//         .trim()
-//         .replace(/^```(?:json)?\s*/i, '')
-//         .replace(/\s*```$/, '')
-//         .trim();
-// }
 function stripCodeFences(raw: string): string {
-    // Finds the first '{' and the last '}' and extracts everything in between.
-    // This completely bypasses markdown fences and conversational filler.
-    const match = raw.match(/\{[\s\S]*\}/);
-    return match ? match[0] : raw.trim();
+    return raw
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/, '')
+        .trim();
 }
 
 function formatZodError(err: z.ZodError): string {

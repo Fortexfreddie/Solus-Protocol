@@ -248,7 +248,7 @@ export class AuditLogger {
                 orderBy: { ts: 'desc' },
             });
             return rows.map((r) => ({
-                agentId: (r.data as Record<string, unknown>)['agentId'] as AgentId,
+                agentId: r.agentId as AgentId,
                 fromToken: (r.data as Record<string, unknown>)['fromToken'],
                 toToken: (r.data as Record<string, unknown>)['toToken'],
                 amount: (r.data as Record<string, unknown>)['amountIn'],
