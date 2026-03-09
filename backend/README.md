@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org)
 [![Solana](https://img.shields.io/badge/Solana-Devnet-purple)](https://solana.com)
 
-> **[Mission Control Dashboard (frontend)](../frontend/README.md)** | **[Watch the 3-Minute Demo Video Here](link)**
+> **[Mission Control Dashboard (frontend)](../frontend/README.md)** | **[Watch the 3-Minute Demo Video Here](https://youtu.be/ApEqQlCgjWo)**
 
 ---
 
