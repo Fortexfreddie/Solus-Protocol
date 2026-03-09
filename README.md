@@ -37,7 +37,7 @@ This repository is a monorepo containing both the **Backend Engine** and the **M
 - **[Kora (Paymaster Service)](./backend/README.md#kora-paymaster-setup--integration)**
   The localized Solana gasless paymaster module, bundled with custom `kora.toml` and `signers.toml` configurations for immediate plug-and-play execution.
 
-- **[Watch the 3-Minute Demo Video Here](link)**
+- **[Watch the 3-Minute Demo Video Here](https://youtu.be/ApEqQlCgjWo)**
 
 ---
 
