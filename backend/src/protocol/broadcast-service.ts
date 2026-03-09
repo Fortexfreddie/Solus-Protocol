@@ -234,9 +234,14 @@ export class BroadcastService {
         const body = {
             quoteResponse:            quote,
             userPublicKey,
-            wrapAndUnwrapSol:         true,
             dynamicComputeUnitLimit:  true,
-            dynamicSlippage:          { maxBps: 300 },
+            dynamicSlippage:          true,
+            prioritizationFeeLamports: {
+                priorityLevelWithMaxLamports: {
+                    priorityLevel: 'veryHigh',
+                    maxLamports:   1_000_000,
+                },
+            },
         };
 
         const response = await fetchWithTimeout(JUPITER_SWAP_API, {
@@ -269,7 +274,7 @@ export class BroadcastService {
     private async submitTransaction(signedTxBytes: Uint8Array): Promise<string> {
         const versionedTx = VersionedTransaction.deserialize(signedTxBytes);
         return await this.connection.sendRawTransaction(versionedTx.serialize(), {
-            skipPreflight:       false,
+            skipPreflight:       false, // Devnet: ALT accounts not mirrored from mainnet
             preflightCommitment: 'confirmed',
             maxRetries:          3,
         });
