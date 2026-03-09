@@ -51,6 +51,16 @@
  *   POLICY_HOLD      — low confidence or spread, agent holds
  *   TX_FAILED        — swap submission or confirmation failed
  *   CYCLE_COMPLETE   — swap confirmed, proof anchored, balances updated
+ *
+ * Devnet note (Layer 7)
+ * ──────────────────────
+ * Jupiter's Swap API is mainnet-only. V0 transactions reference Address Lookup
+ * Tables (ALTs) that do not exist on Devnet. Broadcast will fail with:
+ *   "Failed to fetch lookup table: Account <address> not found"
+ * This is suppressed as DEVNET_ALT_SKIP — not a TX_FAILED — so Telegram is not
+ * spammed with false alarms during development. The proof is still anchored on
+ * Devnet (Layer 5 memo transaction is unaffected). Switch SOLANA_RPC_URL to
+ * mainnet to get real swap confirmations.
  */
 
 import { Vault } from '../wallet/vault';
@@ -105,30 +115,17 @@ export class Agent {
         this.vault   = vault;
     }
 
-    /**
-     * Async factory — creates an Agent with its vault initialized.
-     * Vault loading is async (supports both filesystem and DB backends).
-     */
     static async create(profile: PersonalityProfile): Promise<Agent> {
         const vault = await Vault.loadOrCreate(profile.agentId, MASTER_KEY, RPC_URL);
         return new Agent(profile, vault);
     }
 
-    getAgentId():    AgentId           { return this.agentId; }
+    getAgentId():    AgentId            { return this.agentId; }
     getProfile():    PersonalityProfile { return this.profile; }
     getCycleCount(): number             { return this.cycleCount; }
     getPublicKey():  string             { return this.vault.getPublicKey().toBase58(); }
     async getBalance()                  { return this.vault.getBalance(); }
 
-    // ─── Main cycle ────────────────────────────────────────────────────────────
-
-    /**
-     * Executes one complete 7-layer Air-Gap Engine cycle.
-     *
-     * Never throws. All errors are caught, logged, and the cycle ends cleanly.
-     * The orchestrator can safely call runCycle() on a fixed interval without
-     * needing to handle exceptions.
-     */
     async runCycle(): Promise<void> {
         this.cycleCount++;
         const cycle  = this.cycleCount;
@@ -142,27 +139,15 @@ export class Agent {
 
         try {
             // ── Layer 1: Price Oracle ─────────────────────────────────────────
-            // Fetch CoinGecko prices and calculate momentum divergence spreads.
-            // Shallow copy so we can safely attach executionQuote below.
             const priceData: PriceData = { ...await getPriceOracle().getPrices() };
 
             // ── Layer 1b: Jupiter Pre-scan (rotated) ──────────────────────────
-            // Build the sorted candidate list and select the pair at the current
-            // rotation index. Advance the index for next cycle regardless of
-            // whether Jupiter succeeds — rotation must be unconditional so
-            // a repeated Jupiter failure on one pair cannot stall the rotation.
-            //
-            // Non-fatal: if Jupiter fails the cycle continues without a quote
-            // and the Strategist falls back to momentum divergence per SKILLS.md.
             const candidates = this.buildCandidateList(priceData);
 
             if (candidates.length > 0) {
-                // Clamp index in case the candidate list shrank since last cycle.
                 const idx     = this.prescanRotationIndex % candidates.length;
                 const prescan = candidates[idx];
 
-                // Advance rotation index BEFORE the await so a Jupiter timeout
-                // or error still moves the rotation forward on the next cycle.
                 this.prescanRotationIndex = (idx + 1) % candidates.length;
 
                 logger.log({
@@ -175,14 +160,13 @@ export class Agent {
                 const prescanQuote = await getPriceOracle().getExecutionQuote(
                     prescan.from,
                     prescan.to,
-                    0.1, // representative amount — not the final tx size
+                    0.1,
                     priceData.prices[prescan.from as TokenSymbol]?.usd ?? 0,
                     priceData.prices[prescan.to  as TokenSymbol]?.usd ?? 0,
                 );
                 priceData.executionQuote = prescanQuote;
             }
 
-            // Emit Layer 1 event — includes pre-scan quote if available.
             eventBus.emit('PRICE_FETCHED', this.agentId, {
                 prices:  priceData.prices,
                 spreads: priceData.spreads,
@@ -201,8 +185,6 @@ export class Agent {
             });
 
             // ── Layer 2: Strategist (DeepSeek) ────────────────────────────────
-            // Strategist receives priceData with executionQuote populated for the
-            // rotated pair. It applies the 4-step Decision Rule from SKILLS.md.
             const balance    = await this.vault.getBalance();
             const txHistory  = logger.getLastNTransactions(5, this.agentId);
 
@@ -222,7 +204,6 @@ export class Agent {
                 return;
             }
 
-            // Work on a mutable copy — Guardian and Policy Engine may adjust amount.
             let decision: StrategistDecision = { ...strategistResult.decision };
 
             eventBus.emit('AGENT_THINKING', this.agentId, {
@@ -241,9 +222,6 @@ export class Agent {
             });
 
             // ── Layer 1c: Re-fetch Jupiter quote for actual decided pair ───────
-            // If the Strategist chose a different pair than the pre-scan, fetch
-            // a precise quote for the exact pair and amount before Guardian runs.
-            // If the pairs match, skip the extra API call entirely.
             if (decision.decision === 'SWAP') {
                 const alreadyCorrectPair =
                     priceData.executionQuote                                   &&
@@ -261,7 +239,6 @@ export class Agent {
                     );
                     priceData.executionQuote = finalQuote;
 
-                    // Re-emit PRICE_FETCHED so the dashboard reflects the corrected quote.
                     eventBus.emit('PRICE_FETCHED', this.agentId, {
                         prices:  priceData.prices,
                         spreads: priceData.spreads,
@@ -280,7 +257,6 @@ export class Agent {
             }
 
             // ── Layer 3: Guardian AI (Gemini) ─────────────────────────────────
-            // Guardian receives the Layer 1c corrected quote for the proposed trade.
             const guardianResult = await guardianService.audit(
                 this.profile, decision, priceData, balance, cycle,
             );
@@ -343,10 +319,8 @@ export class Agent {
 
             if (!policyResult.approved) return;
 
-            // Use the Policy Engine's (possibly clamped) finalDecision from here on.
             const finalDecision = policyResult.finalDecision;
 
-            // HOLD/SKIP decisions end cleanly here — no proof, no tx.
             if (finalDecision.decision !== 'SWAP') {
                 eventBus.emit('AGENT_STATUS', this.agentId, { status: 'cycle_complete', cycle });
                 return;
@@ -395,9 +369,9 @@ export class Agent {
                         this.vault.partiallySignTransaction.bind(this.vault),
                     );
 
-                eventBus.emit('KORA_SIGNED',    this.agentId, { agentId: this.agentId, koraSignerAddress });
-                eventBus.emit('TX_SUBMITTED',   this.agentId, { signature });
-                eventBus.emit('TX_CONFIRMED',   this.agentId, {
+                eventBus.emit('KORA_SIGNED',  this.agentId, { agentId: this.agentId, koraSignerAddress });
+                eventBus.emit('TX_SUBMITTED', this.agentId, { signature });
+                eventBus.emit('TX_CONFIRMED', this.agentId, {
                     signature,
                     fromToken: confirmation.fromToken,
                     toToken:   confirmation.toToken,
@@ -436,14 +410,38 @@ export class Agent {
                 });
 
             } catch (txErr) {
+                const errMsg = (txErr as Error).message ?? '';
+
+                // ── Devnet ALT limitation ─────────────────────────────────────
+                // Jupiter V0 transactions reference Address Lookup Tables (ALTs)
+                // that only exist on mainnet. On Devnet the RPC cannot resolve
+                // them and rejects with "Failed to fetch lookup table: Account
+                // <address> not found". This is not a real failure — the signing
+                // pipeline (vault + kora) completed successfully. We suppress
+                // TX_FAILED and log DEVNET_ALT_SKIP so Telegram is not spammed
+                // during development. Switch SOLANA_RPC_URL to mainnet to get
+                // real swap confirmations.
+                if (errMsg.includes('Failed to fetch lookup table')) {
+                    logger.log({
+                        agentId: this.agentId, cycle, event: 'DEVNET_ALT_SKIP',
+                        data: {
+                            reason:    'Jupiter ALT accounts not present on Devnet — swap skipped',
+                            error:     errMsg,
+                            proofHash: proofRecord.hash,
+                        },
+                    });
+                    return;
+                }
+
+                // All other broadcast errors are real failures — emit TX_FAILED.
                 eventBus.emit('TX_FAILED', this.agentId, {
                     signature: '',
-                    error:     (txErr as Error).message,
+                    error:     errMsg,
                     retrying:  false,
                 });
                 logger.log({
                     agentId: this.agentId, cycle, event: 'TX_FAILED',
-                    data: { error: (txErr as Error).message },
+                    data: { error: errMsg },
                 });
                 return;
             }
@@ -463,20 +461,6 @@ export class Agent {
 
     // ─── Private helpers ───────────────────────────────────────────────────────
 
-    /**
-     * Builds a sorted list of non-neutral candidate pairs for the Layer 1b
-     * pre-scan rotation, ordered by descending momentum divergence.
-     *
-     * Each entry includes the trade direction:
-     *   fromToken = overpriced token (sell it)
-     *   toToken   = underpriced token (buy it)
-     *
-     * Returns an empty array if all pairs are neutral — no pre-scan needed.
-     *
-     * The list is rebuilt from live spread data every cycle so it always
-     * reflects current momentum conditions. A pair that was second-highest
-     * last cycle may be first-highest this cycle.
-     */
     private buildCandidateList(priceData: PriceData): CandidatePair[] {
         const candidates: CandidatePair[] = [];
 
@@ -485,7 +469,6 @@ export class Agent {
 
             const [tokenA, tokenB] = key.split('_') as [string, string];
 
-            // Sell the overpriced token: fromToken = overpriced, toToken = underpriced.
             const pair: CandidatePair = spread.direction.startsWith(tokenA)
                 ? { from: tokenA, to: tokenB, spreadPct: spread.spreadPct }
                 : { from: tokenB, to: tokenA, spreadPct: spread.spreadPct };
@@ -493,9 +476,6 @@ export class Agent {
             candidates.push(pair);
         }
 
-        // Sort descending by momentum divergence so the highest-signal pairs
-        // are evaluated most frequently (they appear at lower rotation indices
-        // and are visited first on each full rotation).
         candidates.sort((a, b) => b.spreadPct - a.spreadPct);
 
         return candidates;

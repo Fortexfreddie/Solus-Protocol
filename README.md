@@ -16,12 +16,28 @@ This repository is a monorepo containing both the **Backend Engine** and the **M
 
 - [**backend (The 7-Layer Air-Gap Engine)**](./backend/README.md)
   The core trading engine, containing the LLM orchestration (DeepSeek & Gemini), Policy Engine, on-chain Proof-of-Reasoning, AES-256-GCM Vaults, and Kora Paymaster integration.
-  
-- [**frontend (Mission Control Dashboard)**](./frontend/README.md) | **[Telegram Bot (Out-of-band Monitoring)](./backend/README.md#telegram-integration)** | **[Watch the 3-Minute Demo Video Here](link)**
+
+- [**frontend (Mission Control Dashboard)**](./frontend/README.md)
   The Next.js real-time observer dashboard. Connects via WebSocket to surface agent thinking, audits, policy checks, and live PnL in real time.
+
+- **[Telegram Bot (Out-of-band Monitoring & Control)](./backend/README.md#telegram-integration)**
+  A fully integrated Telegram bot that pushes high-signal notifications directly to your phone — confirmed swaps, Guardian vetoes, stop-loss triggers, and low-balance alerts. Includes an inline fleet control panel so you can pause, resume, or force-cycle any agent without touching the dashboard.
+
+  | What you get | How |
+  |---|---|
+  | Swap confirmed / failed | Push notification with Explorer link |
+  | Guardian blocked a trade | Instant veto alert with reasoning |
+  | Stop-loss triggered | Agent auto-paused, notification sent |
+  | Low SOL balance | Alert before agent runs out of gas |
+  | Fleet control | Inline buttons — pause / resume / run any agent |
+  | `/status` `/balances` `/agents` | Live fleet data on demand |
+
+  > **Silent Guardian** — routine approved cycles never send a notification. Your phone only buzzes when something needs attention.
 
 - **[Kora (Paymaster Service)](./backend/README.md#kora-paymaster-setup--integration)**
   The localized Solana gasless paymaster module, bundled with custom `kora.toml` and `signers.toml` configurations for immediate plug-and-play execution.
+
+- **[Watch the 3-Minute Demo Video Here](link)**
 
 ---
 
@@ -47,9 +63,18 @@ pnpm install
 cp .env.example .env
 pnpm dev
 ```
-Navigate to `http://localhost:3000` to view the dashboard!
+Navigate to `http://localhost:3000` to view the dashboard.
 
-### 3. Use the Solus CLI (Optional)
+### 3. Enable the Telegram Bot (Optional)
+Add these three variables to `backend/.env`:
+```env
+TELEGRAM_BOT_TOKEN=your_bot_token      # From @BotFather
+TELEGRAM_CHAT_ID=your_chat_id          # Your personal or group chat ID
+TELEGRAM_ADMIN_ID=your_telegram_id     # Your Telegram user ID (enables admin controls)
+```
+The bot starts automatically with the backend. Send `/help` in Telegram to see all commands.
+
+### 4. Use the Solus CLI (Optional)
 With the backend running, open a new terminal in the `backend/` directory:
 ```bash
 pnpm solus status            # Fleet PnL leaderboard
@@ -84,12 +109,12 @@ The dashboard will be live at `http://localhost:3000`.
 
 ## Technical Documentation
 
-- **[backend Architecture & Setup](./backend/README.md)**
-- **[frontend Architecture & Setup](./frontend/README.md)**
+- **[Backend Architecture & Setup](./backend/README.md)**
+- **[Frontend Architecture & Setup](./frontend/README.md)**
 - **[Deep Dive: The 7-Layer Engine](./backend/DEEP_DIVE.md)**
 - **[Agent Skills & Prompt Manual](./backend/SKILLS.md)**
 
 ---
 
-*Built for the Superteam Nigeria DeFi Developer Challenge.*  
+*Built for the Superteam Nigeria DeFi Developer Challenge.*
 *Solus Protocol — Autonomous. Auditable. On-chain.*
